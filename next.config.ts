@@ -7,7 +7,9 @@ const withPWA = withPWAInit({
 });
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // Turbopack is enabled by default in Next.js 16, but next-pwa only provides a Webpack plugin.
+  // Adding an empty configuration silences the error.
+  turbopack: {},
 };
 
 export default withPWA(nextConfig);
