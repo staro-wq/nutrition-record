@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
 import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame } from 'lucide-react';
 
@@ -17,87 +17,96 @@ interface Macro {
 }
 
 // ---------------------------------------------
-// DUMMY DATA FOR REPORT SCREEN
+// REPORT DATA (Dynamic mapping removed contextually)
 // ---------------------------------------------
-const reportData = {
-  score: 82,
-  advice: "カロリーを目標内に抑えつつ、タンパク質もしっかり摂れています！素晴らしいペースです。",
-  targetCalories: 1800,
-  actualCalories: 1710,
-  pfc: [
-    { name: 'タンパク質', value: 95, fill: '#3b82f6', ideal: '25%' }, 
-    { name: '脂質', value: 55, fill: '#fbbf24', ideal: '20%' },      
-    { name: '炭水化物', value: 210, fill: '#10b981', ideal: '55%' }   
-  ],
-  meals: [
-    { id: '1', time: '朝食', name: 'トーストと目玉焼き', calories: 450, eval: 'good', comment: 'バランス良好' },
-    { id: '2', time: '昼食', name: '豚骨ラーメン', calories: 650, eval: 'warning', comment: '脂質が多めです' },
-    { id: '3', time: '夕食', name: '鶏むね肉とサラダ', calories: 500, eval: 'good', comment: '高タンパク低脂質！' },
-    { id: '4', time: '間食', name: 'プロテインバー', calories: 110, eval: 'average', comment: '適度な間食です' },
-  ]
-};
-
-// Calculate actual percentages for the custom Legend
-const totalPFC = reportData.pfc.reduce((acc, item) => acc + item.value, 0);
-
-// For the Calorie Bar Chart
-const calorieChartData = [
-  { name: '本日', 摂取カロリー: reportData.actualCalories }
-];
 
 
 // ---------------------------------------------
-// DUMMY DATA FOR HISTORY SCREEN
+// DUMMY DATA FOR HISTORY SCREEN (Removed to start fresh)
 // ---------------------------------------------
-interface MealHistory { name: string; calories: number; protein: number; fat: number; carbs: number; }
+interface MealHistory { name: string; calories: number; protein: number; fat: number; carbs: number; isUnanalyzed?: boolean; image?: string | null; }
 interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory | null>; }
 
-const dummyHistory: Record<string, DailyHistory> = {
-  '2026-03-14': {
-    date: '2026-03-14', score: 98, totalCalories: 1780, status: 'achieved',
-    advice: 'カロリーもPFCバランスも完璧です！この調子で続けていきましょう。',
-    meals: {
-      breakfast: { name: 'オートミールと卵', calories: 400, protein: 20, fat: 12, carbs: 50 },
-      lunch: { name: '鶏むね肉のサラダボウル', calories: 600, protein: 45, fat: 15, carbs: 60 },
-      dinner: { name: '鮭の塩焼き定食', calories: 650, protein: 35, fat: 20, carbs: 70 },
-      snack: { name: 'プロテイン', calories: 130, protein: 25, fat: 2, carbs: 5 }
-    }
-  },
-  '2026-03-15': {
-    date: '2026-03-15', score: 85, totalCalories: 1950, status: 'achieved',
-    advice: '少しカロリーは多めですが、目標内です。タンパク質がしっかり摂れています！',
-    meals: {
-      breakfast: { name: 'トーストと目玉焼き', calories: 450, protein: 15, fat: 20, carbs: 45 },
-      lunch: { name: '幕の内弁当', calories: 800, protein: 30, fat: 25, carbs: 95 },
-      dinner: { name: '豚の生姜焼き', calories: 700, protein: 30, fat: 35, carbs: 60 },
-      snack: null
-    }
-  },
-  '2026-03-16': {
-    date: '2026-03-16', score: 60, totalCalories: 2500, status: 'exceeded',
-    advice: '脂質がかなり多めでした。明日は揚げ物を控えて、野菜を多めにしましょう。',
-    meals: {
-      breakfast: { name: 'グラノーラと牛乳', calories: 500, protein: 15, fat: 18, carbs: 70 },
-      lunch: { name: 'ラーメンとチャーハン', calories: 1200, protein: 25, fat: 50, carbs: 150 },
-      dinner: { name: '唐揚げ定食', calories: 800, protein: 35, fat: 40, carbs: 70 },
-      snack: null
-    }
-  },
-};
+const dummyHistory: Record<string, DailyHistory> = {};
 
+
+interface UserProfile { height: string; weight: string; goal: string; }
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
+  const [historyData, setHistoryData] = useState<Record<string, DailyHistory>>(dummyHistory);
+  const [recordTargetDate, setRecordTargetDate] = useState<string>('today');
+  
+  // --- Profile State ---
+  const [profile, setProfile] = useState<UserProfile>({ height: '170', weight: '65', goal: '標準体重を目指す' });
+  const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
 
-  // --- Home Screen Global State ---
+  const [currentMonth, setCurrentMonth] = useState(() => {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  });
+  
+  // Generate real today string
+  const todayDateStr = (() => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
+  // --- Home Screen Global State derived from history ---
   const [mode, setMode] = useState<Mode>('diet');
-  const [consumed, setConsumed] = useState({ calories: 1080, protein: 30, fat: 35, carbs: 150 });
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [streakDays, setStreakDays] = useState(14);
+
+  const todayHistory = historyData[todayDateStr];
+  const consumed = todayHistory ? {
+    calories: todayHistory.totalCalories,
+    protein: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.protein || 0), 0),
+    fat: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.fat || 0), 0),
+    carbs: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.carbs || 0), 0),
+  } : { calories: 0, protein: 0, fat: 0, carbs: 0 };
+  const [streakDays, setStreakDays] = useState(0);
+
+  // --- Persistent Storage (LocalStorage) ---
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  useEffect(() => {
+    try {
+      const savedProfile = localStorage.getItem('nutritionApp_profile');
+      if (savedProfile) setProfile(JSON.parse(savedProfile));
+
+      const savedMode = localStorage.getItem('nutritionApp_mode');
+      if (savedMode) setMode(savedMode as Mode);
+
+      const savedHistory = localStorage.getItem('nutritionApp_historyData');
+      if (savedHistory) setHistoryData(JSON.parse(savedHistory));
+
+      const savedStreak = localStorage.getItem('nutritionApp_streakDays');
+      if (savedStreak) setStreakDays(Number(savedStreak));
+    } catch (e) {
+      console.error("Failed to load data from localStorage", e);
+    }
+    setIsLoaded(true);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded) localStorage.setItem('nutritionApp_profile', JSON.stringify(profile));
+  }, [profile, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) localStorage.setItem('nutritionApp_mode', mode);
+  }, [mode, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) localStorage.setItem('nutritionApp_historyData', JSON.stringify(historyData));
+  }, [historyData, isLoaded]);
+
+  useEffect(() => {
+    if (isLoaded) localStorage.setItem('nutritionApp_streakDays', streakDays.toString());
+  }, [streakDays, isLoaded]);
+
   // --- Record Modal State ---
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
   const [mealCategory, setMealCategory] = useState<MealCategory>('dinner');
   const [mealText, setMealText] = useState('');
+  const [mealImage, setMealImage] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<{ calories: number, protein: number, fat: number, carbs: number, foodName?: string } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -105,13 +114,41 @@ export default function Dashboard() {
   // --- Calendar Date State ---
   const [selectedDateDetails, setSelectedDateDetails] = useState<DailyHistory | null>(null);
 
-  const targets = {
-    diet: { calories: 1800, protein: 90, fat: 50, carbs: 200 },
-    health: { calories: 2200, protein: 110, fat: 60, carbs: 250 },
-    muscle: { calories: 2600, protein: 150, fat: 70, carbs: 300 },
-  };
+  // Dynamic Target Calculation based on Profile
+  const weightNum = parseFloat(profile.weight) || 65;
+  const heightNum = parseFloat(profile.height) || 170; 
+  
+  // Approximate BMR using Mifflin-St Jeor (assuming Age 30 Male as generic fallback)
+  const bmr = 10 * weightNum + 6.25 * heightNum - 145;
+  
+  // TDEE estimation (Moderate activity multiplier)
+  let targetCalories = Math.round(bmr * 1.55);
+  let targetProtein = Math.round(weightNum * 1.2);
 
-  const currentTarget = targets[mode];
+  if (mode === 'diet') {
+    targetCalories -= 500;
+    targetProtein = Math.round(weightNum * 1.5);
+  } else if (mode === 'muscle') {
+    targetCalories += 500;
+    targetProtein = Math.round(weightNum * 2.0);
+  }
+
+  // Ensure reasonable minimums
+  targetCalories = Math.max(1200, targetCalories); 
+  targetProtein = Math.max(50, targetProtein);
+
+  // Fat is ~25% of calories (9 kcal/g)
+  const targetFat = Math.round((targetCalories * 0.25) / 9);
+
+  // Carbs is remainder (4 kcal/g)
+  const targetCarbs = Math.max(0, Math.round((targetCalories - (targetProtein * 4) - (targetFat * 9)) / 4));
+
+  const currentTarget = {
+    calories: targetCalories,
+    protein: targetProtein,
+    fat: targetFat,
+    carbs: targetCarbs
+  };
   const remainingCalories = Math.max(0, currentTarget.calories - consumed.calories);
   const caloriePercent = Math.min(100, (consumed.calories / currentTarget.calories) * 100);
 
@@ -126,20 +163,84 @@ export default function Dashboard() {
   const strokeDashoffset = circleCircumference - (caloriePercent / 100) * circleCircumference;
 
   const getAdvice = () => {
-    const proteinShortage = Math.max(0, currentTarget.protein - consumed.protein);
-    const calorieShortage = Math.max(0, remainingCalories);
+    if (consumed.calories === 0) return "まだ今日の食事が記録されていません。画面下の「＋」ボタンから最初の食事を記録しましょう！";
 
-    if (calorieShortage === 0) return "本日の目標カロリーに到達しました！これ以上の摂取は控えるか、軽い運動を取り入れましょう。";
-    if (proteinShortage === 0) return "タンパク質の目標を達成しました！素晴らしいです。残りのカロリーはビタミンや食物繊維を中心にバランスよく摂りましょう。";
-    if (proteinShortage < 15) return `あと少しでタンパク質の目標達成です（残り ${proteinShortage}g）。ゆで卵や納豆などで微調整がおすすめです。`;
+    const remCal = Math.max(0, currentTarget.calories - consumed.calories);
+    const remP = Math.max(0, currentTarget.protein - consumed.protein);
+    const remF = Math.max(0, currentTarget.fat - consumed.fat);
+    const remC = Math.max(0, currentTarget.carbs - consumed.carbs);
+
+    // Over-consumption check
+    if (consumed.calories > currentTarget.calories + 200) {
+      return "本日の目標カロリーを大きくオーバーしています。明日の食事を少し軽めにするか、有酸素運動を取り入れて調整しましょう！";
+    }
+    if (remCal === 0) {
+      if (remP > 10) return "カロリーは上限に達しましたが、タンパク質が不足しています。明日は脂質を抑えて高タンパクな食事を意識しましょう。";
+      return "本日の目標カロリーに到達しました！完璧なペースです。これ以上の摂取は控えて胃を休めましょう。";
+    }
+
+    // PFC Balance Analysis
+    let advice = `あと ${remCal}kcal 食べられます。`;
+
+    if (remP > 30) {
+      advice += `タンパク質が大幅に不足（残り${remP}g）しています。プロテインや鶏むね肉、お刺身などの高タンパクな食材をガッツリ取り入れましょう。`;
+    } else if (remP > 10) {
+      if (remF < 10) {
+        advice += `タンパク質があと${remP}g必要ですが、脂質はほぼ上限です。ノンオイルのツナ缶やささみ、低脂質ヨーグルト等を追加しましょう。`;
+      } else {
+        advice += `ゆで卵や納豆などで、タンパク質をあと${remP}gほど微調整するのがおすすめです。`;
+      }
+    } else {
+      if (remF > 20 && remC > 50) {
+        advice += `タンパク質は十分です！残りはご飯や麺類などの炭水化物と、良質な脂質（アボカドやナッツ）でカロリーを満たしましょう。`;
+      } else if (remC > 40) {
+        advice += `タンパク質・脂質は十分です。和菓子やフルーツ、おにぎり等で炭水化物（あと${remC}g）だけを補給してエネルギーを満タンにしましょう！`;
+      } else {
+        advice += `PFCバランスはほぼ理想的です！残りのカロリーはなるべく野菜スープやサラダなど、ヘルシーな食事で満たしてください。`;
+      }
+    }
+
+    if (mode === 'diet' && remCal < 300 && remP > 15) {
+       advice = `【減量警告】カロリー残量が少ない（残り${remCal}kcal）のにタンパク質が不足（残り${remP}g）しています！プロテインアイソレート（WPI）などで純粋にタンパク質だけを補給してください。`;
+    }
     
-    if (mode === 'diet') return `今日の夕食は、あと ${calorieShortage}kcal 以内に抑えましょう。タンパク質が ${proteinShortage}g 不足しています。鶏むね肉や豆腐がおすすめです。`;
-    if (mode === 'muscle') return `筋肥大のためには、あと ${proteinShortage}g のタンパク質が必要です。プロテインや赤身肉をしっかり摂取しましょう。残り ${calorieShortage}kcal です。`;
-    return `現在のPFCバランスは良好ですが、タンパク質が少し不足気味（あと${proteinShortage}g）です。野菜と一緒にバランスよく食べましょう。`;
+    if (mode === 'muscle' && remCal > 800) {
+       advice = `【増量アラート】まだ ${remCal}kcal も余っています！筋肥大のためにはカロリー摂取が必須です。餅やパスタ、プロテインなどで積極的に栄養を流し込んでください。`;
+    }
+
+    return advice;
+  };
+
+  // Dynamically compute report data based on state
+  const reportDataScoreRaw = consumed.calories > 0 ? Math.max(0, 100 - Math.abs((consumed.calories / currentTarget.calories) * 100 - 100) * 0.5) : 0;
+  const reportData = {
+    score: Math.round(reportDataScoreRaw),
+    advice: getAdvice(),
+    targetCalories: currentTarget.calories,
+    actualCalories: consumed.calories,
+    pfc: [
+      { name: 'タンパク質', value: consumed.protein || 1, fill: '#3b82f6', ideal: '25%' }, 
+      { name: '脂質', value: consumed.fat || 1, fill: '#fbbf24', ideal: '20%' },      
+      { name: '炭水化物', value: consumed.carbs || 1, fill: '#10b981', ideal: '55%' }   
+    ],
+    meals: [] as Array<{ id: string, time: string, name: string, calories: number, eval: 'good' | 'warning' | 'average', comment: string }>
+  };
+  const totalPFC = reportData.pfc.reduce((acc, item) => acc + item.value, 0);
+  const calorieChartData = [{ name: '本日', 摂取カロリー: reportData.actualCalories }];
+
+  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setMealImage(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   const handleAnalyze = async () => {
-    if (!mealText.trim()) return;
+    if (!(mealText.trim() || mealImage)) return;
     setIsAnalyzing(true);
     setAnalysisResult(null);
     setAnalysisError(null);
@@ -173,25 +274,125 @@ export default function Dashboard() {
 
   const handleRecord = () => {
     if (!analysisResult) return;
-    setConsumed(prev => ({
-      calories: prev.calories + analysisResult.calories,
-      protein: prev.protein + analysisResult.protein,
-      fat: prev.fat + analysisResult.fat,
-      carbs: prev.carbs + analysisResult.carbs,
-    }));
+    
+    const targetDate = recordTargetDate === 'today' ? todayDateStr : recordTargetDate;
+    const hasAnyMeal = historyData[targetDate] && Object.values(historyData[targetDate].meals).some(m => m !== null);
+    
+    // Update streak if this is the very first meal being recorded for the target date
+    if (!hasAnyMeal) {
+      setStreakDays(s => s + 1);
+    }
+
+    setHistoryData(prev => {
+      const existingInfo = prev[targetDate] || { 
+        date: targetDate, score: 80, totalCalories: 0, status: 'achieved', advice: '新しく記録が追加されました！', 
+        meals: { breakfast: null, lunch: null, dinner: null, snack: null } 
+      };
+      const newTotal = existingInfo.totalCalories + analysisResult.calories;
+      const newStatus = newTotal > currentTarget.calories ? 'exceeded' : 'achieved';
+      
+      return {
+        ...prev,
+        [targetDate]: {
+          ...existingInfo,
+          totalCalories: newTotal,
+          status: newStatus as 'achieved' | 'exceeded',
+          meals: {
+            ...existingInfo.meals,
+            [mealCategory]: {
+              name: analysisResult.foodName || mealText.substring(0, 15) || "記録",
+              calories: analysisResult.calories,
+              protein: analysisResult.protein,
+              fat: analysisResult.fat,
+              carbs: analysisResult.carbs,
+              image: mealImage
+            }
+          }
+        }
+      };
+    });
+
     setIsRecordModalOpen(false);
     setTimeout(() => {
+      setMealImage(null);
       setMealText('');
       setAnalysisResult(null);
       setMealCategory('dinner');
-      setActiveTab('home'); 
+      if (recordTargetDate === 'today') {
+        setActiveTab('home'); 
+      }
+      setRecordTargetDate('today');
     }, 300);
   };
 
+  const handleRecordWithoutAnalysis = () => {
+    if (!(mealText.trim() || mealImage)) return;
+    
+    const targetDate = recordTargetDate === 'today' ? todayDateStr : recordTargetDate;
+    const hasAnyMeal = historyData[targetDate] && Object.values(historyData[targetDate].meals).some(m => m !== null);
+    
+    if (!hasAnyMeal) {
+      setStreakDays(s => s + 1);
+    }
+
+    setHistoryData(prev => {
+      const existingInfo = prev[targetDate] || { 
+        date: targetDate, score: 80, totalCalories: 0, status: 'empty', advice: '未解析の食事が含まれており正確なスコアが出せません。', 
+        meals: { breakfast: null, lunch: null, dinner: null, snack: null } 
+      };
+      
+      return {
+        ...prev,
+        [targetDate]: {
+          ...existingInfo,
+          meals: {
+            ...existingInfo.meals,
+            [mealCategory]: {
+              name: mealText || "写真の記録",
+              calories: 0,
+              protein: 0,
+              fat: 0,
+              carbs: 0,
+              isUnanalyzed: true,
+              image: mealImage
+            }
+          }
+        }
+      };
+    });
+
+    setIsRecordModalOpen(false);
+    setTimeout(() => {
+      setMealImage(null);
+      setMealText('');
+      setAnalysisResult(null);
+      setMealCategory('dinner');
+      if (recordTargetDate === 'today') {
+        setActiveTab('home'); 
+      }
+      setRecordTargetDate('today');
+    }, 300);
+  };
+
+  const triggerAnalysisForMeal = (date: string, cat: MealCategory, text: string, img?: string | null) => {
+    setRecordTargetDate(date);
+    setMealCategory(cat);
+    setMealText(text);
+    if (img) setMealImage(img);
+    setSelectedDateDetails(null);
+    setIsRecordModalOpen(true);
+  };
+
   // Calendar setup
-  const daysInMonth = Array.from({ length: 31 }, (_, i) => i + 1);
-  const startDayOfWeek = 0; 
-  const calendarGrids = Array(startDayOfWeek).fill(null).concat(daysInMonth);
+  const currentYear = currentMonth.getFullYear();
+  const currentMonthNum = currentMonth.getMonth() + 1; // 1-12
+  const daysInCurrentMonth = new Date(currentYear, currentMonthNum, 0).getDate();
+  const startDayOfWeek = new Date(currentYear, currentMonthNum - 1, 1).getDay(); // 0 is Sunday
+  
+  const calendarGrids = Array(startDayOfWeek).fill(null).concat(Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1));
+
+  const handlePrevMonth = () => setCurrentMonth(new Date(currentYear, currentMonthNum - 2, 1));
+  const handleNextMonth = () => setCurrentMonth(new Date(currentYear, currentMonthNum, 1));
 
   // Custom Legend for PFC
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -216,6 +417,10 @@ export default function Dashboard() {
     );
   };
 
+  if (!isLoaded) {
+    return <div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="animate-spin text-emerald-500" size={32} /></div>;
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-28">
       
@@ -226,7 +431,7 @@ export default function Dashboard() {
             <div className="flex justify-between items-center mb-6">
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-slate-800">今日の設定</h1>
-                <p className="text-xs text-slate-500 mt-1">170cm / 80kg → 目標 69kg</p>
+                <p className="text-xs text-slate-500 mt-1">{profile.height}cm / {profile.weight}kg → 目標: {profile.goal || '未設定'}</p>
               </div>
               <div className="bg-slate-100 p-1 rounded-full flex gap-1">
                 <button
@@ -316,10 +521,10 @@ export default function Dashboard() {
         <div className="animate-in fade-in duration-300 px-4 pt-6">
           <div className="flex justify-between items-center mb-6 px-2">
             <h1 className="text-xl font-extrabold tracking-tight text-slate-800">履歴・カレンダー</h1>
-            <div className="flex items-center gap-4 text-slate-600 font-bold bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100">
-              <ChevronLeft size={20} className="text-slate-400" />
-              <span className="text-sm">2026年 3月</span>
-              <ChevronRight size={20} className="text-slate-400" />
+            <div className="flex items-center gap-2 text-slate-600 font-bold bg-white px-3 py-1.5 rounded-full shadow-sm border border-slate-100">
+              <button onClick={handlePrevMonth} className="hover:bg-slate-50 p-1 rounded-full transition-colors"><ChevronLeft size={20} className="text-slate-400 hover:text-emerald-500" /></button>
+              <span className="text-sm w-[88px] text-center tracking-wide">{currentYear}年 {currentMonthNum}月</span>
+              <button onClick={handleNextMonth} className="hover:bg-slate-50 p-1 rounded-full transition-colors"><ChevronRight size={20} className="text-slate-400 hover:text-emerald-500" /></button>
             </div>
           </div>
 
@@ -334,14 +539,14 @@ export default function Dashboard() {
               {calendarGrids.map((day, idx) => {
                 if (day === null) return <div key={`empty-${idx}`} className="h-[72px]" />;
                 
-                const dateStr = `2026-03-${day.toString().padStart(2, '0')}`;
-                const history = dummyHistory[dateStr];
-                const isToday = day === 18;
+                const dateStr = `${currentYear}-${String(currentMonthNum).padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+                const history = historyData[dateStr];
+                const isToday = dateStr === todayDateStr;
 
                 return (
-                  <button key={day} onClick={() => history ? setSelectedDateDetails(history) : null}
+                  <button key={day} onClick={() => setSelectedDateDetails(history || { date: dateStr, score: 0, totalCalories: 0, status: 'empty', advice: 'この日の記録はまだありません。', meals: { breakfast: null, lunch: null, dinner: null, snack: null } })}
                     className={`relative flex flex-col items-center justify-start h-[72px] rounded-2xl p-1.5 transition-all
-                      ${history ? 'cursor-pointer hover:ring-2 hover:ring-emerald-500/30 bg-slate-50' : 'cursor-default opacity-50'}
+                      ${history ? 'cursor-pointer hover:ring-2 hover:ring-emerald-500/30 bg-slate-50' : 'cursor-pointer hover:ring-2 hover:ring-slate-300 bg-transparent opacity-60'}
                       ${isToday ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : 'border border-slate-100'}
                     `}
                   >
@@ -377,7 +582,7 @@ export default function Dashboard() {
                 <div className="absolute flex flex-col items-center justify-center text-center">
                   <span className="text-xs font-bold text-emerald-600 mb-1">総合スコア</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-6xl font-black tracking-tighter text-slate-800">{reportData.score}</span>
+                    <span className="text-6xl font-black tracking-tighter text-slate-800">{consumed.calories > 0 ? reportData.score : '-'}</span>
                     <span className="text-xl font-bold text-slate-400">/100</span>
                   </div>
                 </div>
@@ -498,7 +703,7 @@ export default function Dashboard() {
           <span className="text-[10px] font-bold">レポート</span>
         </button>
 
-        <button className="flex flex-col items-center gap-1 text-slate-400 hover:text-emerald-500 transition-colors">
+        <button onClick={() => setIsSettingsModalOpen(true)} className="flex flex-col items-center gap-1 text-slate-400 hover:text-emerald-500 transition-colors">
           <Settings size={24} strokeWidth={2} />
           <span className="text-[10px] font-bold">設定</span>
         </button>
@@ -530,16 +735,25 @@ export default function Dashboard() {
                 <textarea value={mealText} onChange={(e) => setMealText(e.target.value)} placeholder="例：鶏肉のサラダと玄米、お味噌汁" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[100px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all resize-none text-sm" />
               </div>
               
-              <button className="w-full flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all group">
-                <div className="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 group-hover:scale-110 transition-transform"><Camera size={20} className="text-slate-400 group-hover:text-emerald-500" /></div>
-                <span className="text-sm font-semibold">写真を追加（UIのみ）</span>
-              </button>
+              {!mealImage ? (
+                <label className="w-full flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all group cursor-pointer">
+                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                  <div className="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 group-hover:scale-110 transition-transform"><Camera size={20} className="text-slate-400 group-hover:text-emerald-500" /></div>
+                  <span className="text-sm font-semibold">写真を追加</span>
+                </label>
+              ) : (
+                <div className="relative w-full rounded-2xl overflow-hidden aspect-video bg-slate-100 border border-slate-200 shadow-sm">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={mealImage} alt="Meal preview" className="w-full h-full object-cover" />
+                  <button onClick={() => setMealImage(null)} className="absolute top-3 right-3 bg-slate-900/60 text-white p-2 rounded-full hover:bg-slate-900 transition-colors backdrop-blur-sm"><X size={16} /></button>
+                </div>
+              )}
 
               <div className="pt-2">
                 {!analysisResult ? (
                   <div className="space-y-3">
-                    <button onClick={handleAnalyze} disabled={!mealText.trim() || isAnalyzing} className={`w-full flex items-center justify-center gap-2 font-bold rounded-2xl py-4 transition-all shadow-lg ${ isAnalyzing ? 'bg-slate-800 text-slate-200 shadow-slate-900/10 cursor-not-allowed' : mealText.trim() ? 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500 active:scale-[0.98]' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' }`}>
-                      {isAnalyzing ? <><Loader2 className="animate-spin" size={20} />AIが解析中...</> : <><Sparkles size={20} className={mealText.trim() ? "text-emerald-200" : "text-slate-400"} />AIで栄養素を解析する</>}
+                    <button onClick={handleAnalyze} disabled={!(mealText.trim() || mealImage) || isAnalyzing} className={`w-full flex items-center justify-center gap-2 font-bold rounded-2xl py-4 transition-all shadow-lg ${ isAnalyzing ? 'bg-slate-800 text-slate-200 shadow-slate-900/10 cursor-not-allowed' : (mealText.trim() || mealImage) ? 'bg-emerald-600 text-white shadow-emerald-600/20 hover:bg-emerald-500 active:scale-[0.98]' : 'bg-slate-200 text-slate-400 cursor-not-allowed shadow-none' }`}>
+                      {isAnalyzing ? <><Loader2 className="animate-spin" size={20} />AIが解析中...</> : <><Sparkles size={20} className={(mealText.trim() || mealImage) ? "text-emerald-200" : "text-slate-400"} />AIで栄養素を解析する</>}
                     </button>
                     {analysisError && (
                       <div className="text-sm font-semibold text-red-600 bg-red-50 p-3 rounded-xl border border-red-100 flex items-start gap-2 animate-in slide-in-from-top-2 duration-300">
@@ -547,6 +761,9 @@ export default function Dashboard() {
                         <span className="leading-tight">{analysisError}</span>
                       </div>
                     )}
+                    <button onClick={handleRecordWithoutAnalysis} disabled={!(mealText.trim() || mealImage) || isAnalyzing} className="w-full font-bold text-slate-500 py-3 rounded-2xl transition-colors hover:bg-slate-100 active:bg-slate-200 mt-2 text-sm">
+                      解析せずにテキストだけ記録する
+                    </button>
                   </div>
                 ) : (
                   <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -588,6 +805,11 @@ export default function Dashboard() {
                   <span className={`text-base font-bold ${selectedDateDetails.status === 'achieved' ? 'text-emerald-500/50' : 'text-red-500/50'}`}>点</span>
                 </div>
                 <p className="text-slate-700 font-semibold text-sm leading-relaxed">{selectedDateDetails.advice}</p>
+                <div className="mt-4 pt-4 border-t border-slate-100 w-full">
+                  <button onClick={() => { setRecordTargetDate(selectedDateDetails.date); setIsRecordModalOpen(true); setSelectedDateDetails(null); }} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-2xl shadow-md hover:bg-slate-800 transition-all flex items-center justify-center gap-2">
+                    <PlusCircle size={18} /> この日の食事を記録する
+                  </button>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -599,12 +821,27 @@ export default function Dashboard() {
                     <div key={cat.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col gap-3">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-2 items-center"><span className="text-lg">{cat.icon}</span><div><span className="text-xs font-bold text-slate-500 block">{cat.label}</span><span className="text-sm font-extrabold text-slate-800">{meal.name}</span></div></div>
-                        <span className="text-sm font-extrabold text-slate-800 bg-slate-50 py-1 px-3 rounded-lg">{meal.calories}<span className="text-xs text-slate-500 ml-1">kcal</span></span>
+                        {meal.isUnanalyzed ? (
+                          <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1 shadow-sm">
+                            <Sparkles size={14} /> 解析する
+                          </button>
+                        ) : (
+                          <span className="text-sm font-extrabold text-slate-800 bg-slate-50 py-1 px-3 rounded-lg">{meal.calories}<span className="text-xs text-slate-500 ml-1">kcal</span></span>
+                        )}
                       </div>
-                      <div className="flex gap-3 text-xs font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-xl justify-between">
-                        <span>P: <span className="text-slate-800 font-bold">{meal.protein}g</span></span><span>F: <span className="text-slate-800 font-bold">{meal.fat}g</span></span><span>C: <span className="text-slate-800 font-bold">{meal.carbs}g</span></span>
-                      </div>
-                      <div className="w-full h-24 bg-slate-100 rounded-xl flex items-center justify-center border border-slate-200 mt-1"><div className="flex flex-col items-center gap-1 text-slate-400"><ImageIcon size={20} /><span className="text-[10px] font-bold">写真</span></div></div>
+                      {!meal.isUnanalyzed && (
+                        <div className="flex gap-3 text-xs font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-xl justify-between">
+                          <span>P: <span className="text-slate-800 font-bold">{meal.protein}g</span></span><span>F: <span className="text-slate-800 font-bold">{meal.fat}g</span></span><span>C: <span className="text-slate-800 font-bold">{meal.carbs}g</span></span>
+                        </div>
+                      )}
+                      {meal.image ? (
+                        <div className="w-full h-32 rounded-xl overflow-hidden mt-1 shadow-sm border border-slate-50">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={meal.image} alt="Meal" className="w-full h-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="w-full h-20 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer rounded-xl flex items-center justify-center border border-slate-100 mt-1" onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)}><div className="flex flex-col items-center gap-1 text-slate-300"><ImageIcon size={18} /><span className="text-[10px] font-bold">写真</span></div></div>
+                      )}
                     </div>
                   );
                 })}
@@ -613,6 +850,36 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+      {/* 3. Settings Modal */}
+      {isSettingsModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4 sm:p-0 animate-in fade-in duration-200">
+           <div className="bg-white rounded-[2rem] sm:rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in slide-in-from-bottom-12 duration-300 max-h-[90vh] flex flex-col">
+            <div className="p-6 pb-4 border-b border-slate-50 flex justify-between items-center shrink-0">
+              <h2 className="text-xl font-bold text-slate-800">プロフィール設定</h2>
+              <button onClick={() => setIsSettingsModalOpen(false)} className="p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600 rounded-full transition-colors"><X size={20} /></button>
+            </div>
+            <div className="p-6 overflow-y-auto pb-8 space-y-6">
+              <div>
+                <label className="text-sm font-bold text-slate-700 mb-2 block">身長 (cm)</label>
+                <input type="number" value={profile.height} onChange={(e) => setProfile(p => ({...p, height: e.target.value}))} placeholder="例: 170" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all text-base font-bold" />
+              </div>
+              <div>
+                <label className="text-sm font-bold text-slate-700 mb-2 block">現在の体重 (kg)</label>
+                <input type="number" value={profile.weight} onChange={(e) => setProfile(p => ({...p, weight: e.target.value}))} placeholder="例: 65" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all text-base font-bold" />
+              </div>
+              <div>
+                <label className="text-sm font-bold text-slate-700 mb-2 block">目標 (テキスト)</label>
+                <input type="text" value={profile.goal} onChange={(e) => setProfile(p => ({...p, goal: e.target.value}))} placeholder="例: 1ヶ月で-2kg" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all text-base font-bold" />
+              </div>
+              
+              <button onClick={() => setIsSettingsModalOpen(false)} className="w-full bg-slate-900 text-white font-bold rounded-2xl py-4 shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex justify-center items-center mt-4">
+                 保存する
+              </button>
+            </div>
+           </div>
+        </div>
+      )}
+
     </div>
   );
 }
