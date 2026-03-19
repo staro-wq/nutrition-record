@@ -1,8 +1,9 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
+import { fetchAllData, syncProfile, syncDailyLog } from './actions';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
-import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame } from 'lucide-react';
+import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2 } from 'lucide-react';
 
 type Mode = 'diet' | 'health' | 'muscle';
 type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -64,43 +65,57 @@ export default function Dashboard() {
   } : { calories: 0, protein: 0, fat: 0, carbs: 0 };
   const [streakDays, setStreakDays] = useState(0);
 
-  // --- Persistent Storage (LocalStorage) ---
+  // --- Persistent Storage (Server Actions DB) ---
   const [isLoaded, setIsLoaded] = useState(false);
+  const [deviceId, setDeviceId] = useState('');
 
   useEffect(() => {
-    try {
-      const savedProfile = localStorage.getItem('nutritionApp_profile');
-      if (savedProfile) setProfile(JSON.parse(savedProfile));
-
-      const savedMode = localStorage.getItem('nutritionApp_mode');
-      if (savedMode) setMode(savedMode as Mode);
-
-      const savedHistory = localStorage.getItem('nutritionApp_historyData');
-      if (savedHistory) setHistoryData(JSON.parse(savedHistory));
-
-      const savedStreak = localStorage.getItem('nutritionApp_streakDays');
-      if (savedStreak) setStreakDays(Number(savedStreak));
-    } catch (e) {
-      console.error("Failed to load data from localStorage", e);
+    let id = localStorage.getItem('nutritionApp_deviceId');
+    if (!id) {
+      id = crypto.randomUUID();
+      localStorage.setItem('nutritionApp_deviceId', id);
     }
-    setIsLoaded(true);
+    setDeviceId(id);
+
+    fetchAllData(id).then((user) => {
+      setProfile({
+        height: user.height.toString(),
+        weight: user.weight.toString(),
+        goal: user.goal
+      });
+      setMode(user.mode as Mode);
+      setStreakDays(user.streak);
+
+      const loadedHistory: Record<string, DailyHistory> = {};
+      for (const log of user.DailyLogs) {
+        const mealsObj: Record<MealCategory, MealHistory | null> = { breakfast: null, lunch: null, dinner: null, snack: null };
+        for (const m of log.meals) {
+          mealsObj[m.category as MealCategory] = { ...m };
+        }
+        loadedHistory[log.date] = {
+          date: log.date,
+          score: log.score,
+          totalCalories: log.totalCal,
+          status: log.status as 'achieved' | 'exceeded' | 'empty',
+          advice: log.advice,
+          meals: mealsObj
+        };
+      }
+      setHistoryData(loadedHistory);
+      setIsLoaded(true);
+    }).catch(e => {
+      console.error("DB Load Error", e);
+      setIsLoaded(true); // Fallback so UI doesn't hang forever
+    });
   }, []);
 
   useEffect(() => {
-    if (isLoaded) localStorage.setItem('nutritionApp_profile', JSON.stringify(profile));
-  }, [profile, isLoaded]);
+    if (isLoaded && deviceId) {
+      syncProfile(deviceId, profile, mode, streakDays).catch(console.error);
+    }
+  }, [profile, mode, streakDays, isLoaded, deviceId]);
 
-  useEffect(() => {
-    if (isLoaded) localStorage.setItem('nutritionApp_mode', mode);
-  }, [mode, isLoaded]);
-
-  useEffect(() => {
-    if (isLoaded) localStorage.setItem('nutritionApp_historyData', JSON.stringify(historyData));
-  }, [historyData, isLoaded]);
-
-  useEffect(() => {
-    if (isLoaded) localStorage.setItem('nutritionApp_streakDays', streakDays.toString());
-  }, [streakDays, isLoaded]);
+  // Tracking historyData changes requires explicit syncDailyLog calls during mutations to avoid DB overload.
 
   // --- Record Modal State ---
   const [isRecordModalOpen, setIsRecordModalOpen] = useState(false);
@@ -291,24 +306,29 @@ export default function Dashboard() {
       const newTotal = existingInfo.totalCalories + analysisResult.calories;
       const newStatus = newTotal > currentTarget.calories ? 'exceeded' : 'achieved';
       
-      return {
-        ...prev,
-        [targetDate]: {
-          ...existingInfo,
-          totalCalories: newTotal,
-          status: newStatus as 'achieved' | 'exceeded',
-          meals: {
-            ...existingInfo.meals,
-            [mealCategory]: {
-              name: analysisResult.foodName || mealText.substring(0, 15) || "記録",
-              calories: analysisResult.calories,
-              protein: analysisResult.protein,
-              fat: analysisResult.fat,
-              carbs: analysisResult.carbs,
-              image: mealImage
-            }
+      const updatedInfo = {
+        ...existingInfo,
+        totalCalories: newTotal,
+        status: newStatus as 'achieved' | 'exceeded',
+        meals: {
+          ...existingInfo.meals,
+          [mealCategory]: {
+            name: analysisResult.foodName || mealText.substring(0, 15) || "記録",
+            calories: analysisResult.calories,
+            protein: analysisResult.protein,
+            fat: analysisResult.fat,
+            carbs: analysisResult.carbs,
+            isUnanalyzed: false,
+            image: mealImage
           }
         }
+      };
+      
+      syncDailyLog(deviceId, targetDate, updatedInfo, currentTarget.calories).catch(console.error);
+
+      return {
+        ...prev,
+        [targetDate]: updatedInfo
       };
     });
 
@@ -341,23 +361,27 @@ export default function Dashboard() {
         meals: { breakfast: null, lunch: null, dinner: null, snack: null } 
       };
       
-      return {
-        ...prev,
-        [targetDate]: {
-          ...existingInfo,
-          meals: {
-            ...existingInfo.meals,
-            [mealCategory]: {
-              name: mealText || "写真の記録",
-              calories: 0,
-              protein: 0,
-              fat: 0,
-              carbs: 0,
-              isUnanalyzed: true,
-              image: mealImage
-            }
+      const updatedInfo = {
+        ...existingInfo,
+        meals: {
+          ...existingInfo.meals,
+          [mealCategory]: {
+            name: mealText || "写真の記録",
+            calories: 0,
+            protein: 0,
+            fat: 0,
+            carbs: 0,
+            isUnanalyzed: true,
+            image: mealImage
           }
         }
+      };
+
+      syncDailyLog(deviceId, targetDate, updatedInfo, currentTarget.calories).catch(console.error);
+
+      return {
+        ...prev,
+        [targetDate]: updatedInfo
       };
     });
 
@@ -381,6 +405,38 @@ export default function Dashboard() {
     if (img) setMealImage(img);
     setSelectedDateDetails(null);
     setIsRecordModalOpen(true);
+  };
+
+  const handleDeleteMeal = (date: string, cat: MealCategory) => {
+    if (!window.confirm('この食事記録を削除してもよろしいですか？')) return;
+    
+    setHistoryData(prev => {
+      const existingInfo = prev[date];
+      if (!existingInfo) return prev;
+      
+      const newMeals = { ...existingInfo.meals, [cat]: null };
+      
+      // Recalculate daily totals
+      const newCalories = Object.values(newMeals).reduce((sum, m) => sum + (m?.calories || 0), 0);
+      
+      const updatedInfo = {
+        ...existingInfo,
+        totalCalories: newCalories,
+        meals: newMeals
+      };
+
+      syncDailyLog(deviceId, date, updatedInfo, currentTarget.calories).catch(console.error);
+
+      return { ...prev, [date]: updatedInfo };
+    });
+    
+    // Also update selectedDateDetails so the drawer updates immediately without closing
+    setSelectedDateDetails(prev => {
+      if (!prev || prev.date !== date) return prev;
+      const newMeals = { ...prev.meals, [cat]: null };
+      const newCalories = Object.values(newMeals).reduce((sum, m) => sum + (m?.calories || 0), 0);
+      return { ...prev, totalCalories: newCalories, meals: newMeals };
+    });
   };
 
   // Calendar setup
@@ -821,13 +877,17 @@ export default function Dashboard() {
                     <div key={cat.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col gap-3">
                       <div className="flex justify-between items-start">
                         <div className="flex gap-2 items-center"><span className="text-lg">{cat.icon}</span><div><span className="text-xs font-bold text-slate-500 block">{cat.label}</span><span className="text-sm font-extrabold text-slate-800">{meal.name}</span></div></div>
-                        {meal.isUnanalyzed ? (
-                          <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="text-xs bg-emerald-100 text-emerald-700 px-3 py-1.5 rounded-full font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1 shadow-sm">
-                            <Sparkles size={14} /> 解析する
-                          </button>
-                        ) : (
-                          <span className="text-sm font-extrabold text-slate-800 bg-slate-50 py-1 px-3 rounded-lg">{meal.calories}<span className="text-xs text-slate-500 ml-1">kcal</span></span>
-                        )}
+                        <div className="flex items-center gap-1">
+                          {meal.isUnanalyzed ? (
+                            <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1 mr-1">
+                              <Sparkles size={12} /> 解析
+                            </button>
+                          ) : (
+                            <span className="text-sm font-extrabold text-slate-800 bg-slate-50 py-1 px-2 rounded-lg mr-1">{meal.calories}<span className="text-[10px] text-slate-500 ml-0.5">kcal</span></span>
+                          )}
+                          <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"><Edit2 size={16} /></button>
+                          <button onClick={() => handleDeleteMeal(selectedDateDetails.date, cat.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={16} /></button>
+                        </div>
                       </div>
                       {!meal.isUnanalyzed && (
                         <div className="flex gap-3 text-xs font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-xl justify-between">

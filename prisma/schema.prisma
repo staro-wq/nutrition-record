@@ -1,0 +1,47 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String     @id @default(uuid())
+  mode      String     @default("diet")
+  height    Float      @default(170)
+  weight    Float      @default(65)
+  goal      String     @default("標準体重")
+  streak    Int        @default(0)
+  DailyLogs DailyLog[]
+}
+
+model DailyLog {
+  id        String   @id @default(uuid())
+  userId    String
+  date      String
+  targetCal Int
+  totalCal  Int
+  score     Int
+  status    String
+  advice    String
+  user      User     @relation(fields: [userId], references: [id])
+  meals     Meal[]
+
+  @@unique([userId, date])
+}
+
+model Meal {
+  id           String   @id @default(uuid())
+  dailyLogId   String
+  category     String
+  name         String
+  calories     Int
+  protein      Int
+  fat          Int
+  carbs        Int
+  isUnanalyzed Boolean  @default(false)
+  image        String?
+  dailyLog     DailyLog @relation(fields: [dailyLogId], references: [id])
+}
