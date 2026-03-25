@@ -145,15 +145,15 @@ export default function Dashboard() {
   // Approximate BMR using Mifflin-St Jeor (assuming Age 30 Male as generic fallback)
   const bmr = 10 * weightNum + 6.25 * heightNum - 145;
   
-  // TDEE estimation (Moderate activity multiplier)
-  let targetCalories = Math.round(bmr * 1.55);
+  // TDEE estimation (Lightly active multiplier - safer default)
+  let targetCalories = Math.round(bmr * 1.375);
   let targetProtein = Math.round(weightNum * 1.2);
 
   if (mode === 'diet') {
-    targetCalories -= 500;
+    targetCalories -= 400; // Adjusted from 500 for more sustainable loss
     targetProtein = Math.round(weightNum * 1.5);
   } else if (mode === 'muscle') {
-    targetCalories += 500;
+    targetCalories += 300; // Adjusted from 500 for realistic bulk
     targetProtein = Math.round(weightNum * 2.0);
   }
 
