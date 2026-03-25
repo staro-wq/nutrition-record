@@ -34,17 +34,24 @@ export const metadata: Metadata = {
   },
 };
 
+import { Providers } from "@/components/Providers";
+
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
+    <html lang="ja">
+      <head>
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="theme-color" content="#ffffff" />
+      </head>
+      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased text-slate-800 bg-slate-50 relative min-h-[100dvh]`}>
+        <Providers>
+          {children}
+        </Providers>
       </body>
     </html>
   );

@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect } from 'react';
 import { fetchAllData, syncProfile, syncDailyLog } from './actions';
+import { useSession, signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
 import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2 } from 'lucide-react';
 
@@ -68,16 +70,22 @@ export default function Dashboard() {
   // --- Persistent Storage (Server Actions DB) ---
   const [isLoaded, setIsLoaded] = useState(false);
   const [deviceId, setDeviceId] = useState('');
+  
+  const { data: session, status } = useSession();
+  const router = useRouter();
 
   useEffect(() => {
-    let id = localStorage.getItem('nutritionApp_deviceId');
-    if (!id) {
-      id = crypto.randomUUID();
-      localStorage.setItem('nutritionApp_deviceId', id);
+    if (status === "loading") return;
+    if (status === "unauthenticated") {
+      router.push("/login");
+      return;
     }
-    setDeviceId(id);
 
-    fetchAllData(id).then((user) => {
+    if (session?.user?.id) {
+      const id = session.user.id;
+      setDeviceId(id);
+
+      fetchAllData(id).then((user) => {
       setProfile({
         height: user.height.toString(),
         weight: user.weight.toString(),
@@ -106,8 +114,9 @@ export default function Dashboard() {
     }).catch(e => {
       console.error("DB Load Error", e);
       setIsLoaded(true); // Fallback so UI doesn't hang forever
-    });
-  }, []);
+      });
+    }
+  }, [session, status, router]);
 
   useEffect(() => {
     if (isLoaded && deviceId) {
@@ -488,6 +497,7 @@ export default function Dashboard() {
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-slate-800">今日の設定</h1>
                 <p className="text-xs text-slate-500 mt-1">{profile.height}cm / {profile.weight}kg → 目標: {profile.goal || '未設定'}</p>
+                <button onClick={() => signOut()} className="mt-2 text-[10px] font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full transition-colors">ログアウト</button>
               </div>
               <div className="bg-slate-100 p-1 rounded-full flex gap-1">
                 <button
