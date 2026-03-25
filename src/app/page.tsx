@@ -81,8 +81,8 @@ export default function Dashboard() {
       return;
     }
 
-    if (session?.user?.id) {
-      const id = session.user.id;
+    const id = (session?.user as any)?.id;
+    if (id) {
       setDeviceId(id);
 
       fetchAllData(id).then((user) => {
