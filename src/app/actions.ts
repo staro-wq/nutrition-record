@@ -116,3 +116,17 @@ export async function migrateUserData(oldUserId: string, newUserId: string) {
     });
   }
 }
+
+export async function forceMigrateAllData(newUserId: string) {
+  const logs = await prisma.dailyLog.findMany();
+  for (const log of logs) {
+    if (log.userId !== newUserId) {
+      try {
+        await prisma.dailyLog.update({ where: { id: log.id }, data: { userId: newUserId }});
+      } catch (e) {
+        // ignore unique constraint
+      }
+    }
+  }
+}
+

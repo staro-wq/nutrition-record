@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchAllData, syncProfile, syncDailyLog, migrateUserData } from './actions';
+import { fetchAllData, syncProfile, syncDailyLog, migrateUserData, forceMigrateAllData } from './actions';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
-import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2, LogOut } from 'lucide-react';
+import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2, LogOut, RefreshCw } from 'lucide-react';
 
 type Mode = 'diet' | 'health' | 'muscle';
 type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -1175,6 +1175,14 @@ export default function Dashboard() {
               </button>
 
               <div className="pt-6 mt-4 border-t border-slate-100">
+                <button onClick={async () => {
+                  if (confirm("【緊急用】全ての孤立した過去の履歴を、今のアカウントへ強制的に紐付けますか？（自分専用アプリの場合のみ実行してください）")) {
+                    await forceMigrateAllData(deviceId);
+                    window.location.reload();
+                  }
+                }} className="w-full bg-orange-50 text-orange-600 font-bold rounded-2xl py-4 shadow-sm border border-orange-100 hover:bg-orange-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2 mb-3">
+                  <RefreshCw size={18} /> 過去の履歴を強制復旧する
+                </button>
                 <button onClick={() => signOut()} className="w-full bg-red-50 text-red-600 font-bold rounded-2xl py-4 shadow-sm border border-red-100 hover:bg-red-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
                   <LogOut size={18} /> ログアウト
                 </button>
