@@ -1177,8 +1177,13 @@ export default function Dashboard() {
               <div className="pt-6 mt-4 border-t border-slate-100">
                 <button onClick={async () => {
                   if (confirm("【緊急用】全ての孤立した過去の履歴を、今のアカウントへ強制的に紐付けますか？（自分専用アプリの場合のみ実行してください）")) {
-                    await forceMigrateAllData(deviceId);
-                    window.location.reload();
+                    try {
+                      await forceMigrateAllData(deviceId);
+                      alert("データを復旧しました！ページを自動で再読み込みします。");
+                      window.location.reload();
+                    } catch(e) {
+                      alert("エラーが発生しました: " + String(e));
+                    }
                   }
                 }} className="w-full bg-orange-50 text-orange-600 font-bold rounded-2xl py-4 shadow-sm border border-orange-100 hover:bg-orange-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2 mb-3">
                   <RefreshCw size={18} /> 過去の履歴を強制復旧する
