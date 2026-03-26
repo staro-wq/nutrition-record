@@ -21,13 +21,13 @@ export const viewport: Viewport = {
 };
 
 export const metadata: Metadata = {
-  title: "NutriTrack",
-  description: "モダンで洗練された料理記録・栄養管理アプリ",
+  title: "もぐゆく",
+  description: "もぐゆく - 料理記録・栄養管理アプリ",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "NutriTrack",
+    title: "もぐゆく",
   },
   formatDetection: {
     telephone: false,

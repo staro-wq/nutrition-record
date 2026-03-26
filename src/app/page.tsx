@@ -5,7 +5,7 @@ import { fetchAllData, syncProfile, syncDailyLog } from './actions';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
-import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2 } from 'lucide-react';
+import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2, LogOut } from 'lucide-react';
 
 type Mode = 'diet' | 'health' | 'muscle';
 type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'snack';
@@ -497,7 +497,6 @@ export default function Dashboard() {
               <div>
                 <h1 className="text-xl font-bold tracking-tight text-slate-800">今日の設定</h1>
                 <p className="text-xs text-slate-500 mt-1">{profile.height}cm / {profile.weight}kg → 目標: {profile.goal || '未設定'}</p>
-                <button onClick={() => signOut()} className="mt-2 text-[10px] font-bold text-red-500 bg-red-50 hover:bg-red-100 px-3 py-1 rounded-full transition-colors">ログアウト</button>
               </div>
               <div className="bg-slate-100 p-1 rounded-full flex gap-1">
                 <button
@@ -800,13 +799,14 @@ export default function Dashboard() {
                 <label className="text-sm font-bold text-slate-700 mb-3 block">メニュー名・材料など自由入力</label>
                 <textarea value={mealText} onChange={(e) => setMealText(e.target.value)} placeholder="例：鶏肉のサラダと玄米、お味噌汁" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[100px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all resize-none text-sm" />
               </div>
-              
               {!mealImage ? (
-                <label className="w-full flex items-center justify-center gap-3 border-2 border-dashed border-slate-200 rounded-2xl py-5 text-slate-500 hover:text-slate-700 hover:bg-slate-50 hover:border-slate-300 transition-all group cursor-pointer">
-                  <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                  <div className="bg-white p-2.5 rounded-full shadow-sm border border-slate-100 group-hover:scale-110 transition-transform"><Camera size={20} className="text-slate-400 group-hover:text-emerald-500" /></div>
-                  <span className="text-sm font-semibold">写真を追加</span>
-                </label>
+                <div className="flex gap-2">
+                  <label className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-3 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 hover:border-emerald-200 transition-all cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                    <Camera size={18} />
+                    <span className="text-xs font-bold">写真を追加 (任意)</span>
+                  </label>
+                </div>
               ) : (
                 <div className="relative w-full rounded-2xl overflow-hidden aspect-video bg-slate-100 border border-slate-200 shadow-sm">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -843,7 +843,8 @@ export default function Dashboard() {
                       </div>
                     </div>
                     <button onClick={handleRecord} className="w-full bg-slate-900 text-white font-bold rounded-2xl py-4 shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
-                       <CheckCircle2 size={20} className="text-slate-300" />この内容で記録する
+                       <CheckCircle2 size={20} className="text-slate-300" />
+                       {(historyData[recordTargetDate === 'today' ? todayDateStr : recordTargetDate]?.meals[mealCategory] !== null) ? `${({ breakfast: '朝食', lunch: '昼食', dinner: '夕食', snack: '間食' })[mealCategory]}をさらに追加する` : 'この内容で記録する'}
                     </button>
                   </div>
                 )}
@@ -945,6 +946,12 @@ export default function Dashboard() {
               <button onClick={() => setIsSettingsModalOpen(false)} className="w-full bg-slate-900 text-white font-bold rounded-2xl py-4 shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex justify-center items-center mt-4">
                  保存する
               </button>
+
+              <div className="pt-6 mt-4 border-t border-slate-100">
+                <button onClick={() => signOut()} className="w-full bg-red-50 text-red-600 font-bold rounded-2xl py-4 shadow-sm border border-red-100 hover:bg-red-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+                  <LogOut size={18} /> ログアウト
+                </button>
+              </div>
             </div>
            </div>
         </div>
