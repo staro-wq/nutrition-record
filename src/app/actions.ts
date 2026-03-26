@@ -1,6 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
+import { revalidatePath } from 'next/cache';
 
 export async function fetchAllData(userId: string) {
   let user = await prisma.user.findUnique({
@@ -37,6 +38,7 @@ export async function syncProfile(userId: string, profile: any, mode: string, st
       streak
     }
   });
+  revalidatePath('/');
 }
 
 export async function syncDailyLog(userId: string, date: string, data: any, targetCal: number = 0) {
@@ -87,6 +89,7 @@ export async function syncDailyLog(userId: string, date: string, data: any, targ
   if (mealCreates.length > 0) {
     await prisma.meal.createMany({ data: mealCreates });
   }
+  revalidatePath('/');
 }
 
 export async function migrateUserData(oldUserId: string, newUserId: string) {
@@ -115,6 +118,7 @@ export async function migrateUserData(oldUserId: string, newUserId: string) {
       }
     });
   }
+  revalidatePath('/');
 }
 
 export async function forceMigrateAllData(newUserId: string) {
@@ -128,5 +132,6 @@ export async function forceMigrateAllData(newUserId: string) {
       }
     }
   }
+  revalidatePath('/');
 }
 
