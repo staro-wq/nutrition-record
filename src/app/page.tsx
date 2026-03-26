@@ -138,11 +138,6 @@ export default function Dashboard() {
 
       const loadedHistory: Record<string, DailyHistory> = {};
       for (const log of user.DailyLogs) {
-        // Skip ghost logs from DB migration that have lost their meals
-        if (!log.meals || log.meals.length === 0) {
-          continue;
-        }
-
         const mealsObj: Record<MealCategory, MealHistory[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
         for (const m of log.meals) {
           mealsObj[m.category as MealCategory].push({
@@ -152,34 +147,10 @@ export default function Dashboard() {
           });
         }
         
-        // Safety recalculation of score based on actual current meals, ignoring DB dummy scores from old versions
-        const totalCal = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.calories || 0), 0);
-        const totalP = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
-        const totalF = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
-        const totalC = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
-        const totalIron = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.iron || 0), 0);
-        const totalVC = Object.values(mealsObj).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0);
-
-        // Quick dynamic score gen inline for safety on historical data
-        let scoreRaw = 100;
-        const targetCal = currentTarget.calories;
-        const tP = currentTarget.protein;
-        const tF = currentTarget.fat;
-        const tC = currentTarget.carbs;
-        const remCal = Math.max(0, targetCal - totalCal);
-        if (totalCal > targetCal) scoreRaw -= (totalCal - targetCal) * 0.05;
-        scoreRaw -= Math.max(0, tP - totalP) * 0.5;
-        scoreRaw -= Math.max(0, tF - totalF) * 0.5;
-        scoreRaw -= Math.max(0, tC - totalC) * 0.5;
-        if (totalP > tP + 20) scoreRaw -= (totalP - (tP + 20)) * 0.5;
-        if (totalF > tF + 10) scoreRaw -= (totalF - (tF + 10)) * 1.0;
-        if (totalC > tC + 30) scoreRaw -= (totalC - (tC + 30)) * 0.5;
-        const finalScore = Math.max(0, Math.min(100, Math.round(scoreRaw)));
-
         loadedHistory[log.date] = {
           date: log.date,
-          score: finalScore,
-          totalCalories: totalCal,
+          score: log.score,
+          totalCalories: log.totalCal,
           status: log.status as 'achieved' | 'exceeded' | 'empty',
           advice: log.advice,
           meals: mealsObj
