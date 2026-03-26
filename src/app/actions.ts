@@ -88,3 +88,31 @@ export async function syncDailyLog(userId: string, date: string, data: any, targ
     await prisma.meal.createMany({ data: mealCreates });
   }
 }
+
+export async function migrateUserData(oldUserId: string, newUserId: string) {
+  const oldLogs = await prisma.dailyLog.findMany({ where: { userId: oldUserId } });
+  
+  for (const log of oldLogs) {
+    try {
+      await prisma.dailyLog.update({
+        where: { id: log.id },
+        data: { userId: newUserId }
+      });
+    } catch(e) {
+      // Ignore if new user already has a log for this date
+    }
+  }
+
+  const oldUser = await prisma.user.findUnique({ where: { id: oldUserId } });
+  if (oldUser) {
+    await prisma.user.update({
+      where: { id: newUserId },
+      data: {
+        height: oldUser.height,
+        weight: oldUser.weight,
+        goal: oldUser.goal,
+        mode: oldUser.mode
+      }
+    });
+  }
+}

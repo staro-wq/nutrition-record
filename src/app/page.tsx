@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchAllData, syncProfile, syncDailyLog } from './actions';
+import { fetchAllData, syncProfile, syncDailyLog, migrateUserData } from './actions';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
@@ -127,6 +127,16 @@ export default function Dashboard() {
     const id = (session?.user as any)?.id;
     if (id) {
       setDeviceId(id);
+
+      // Legacy user migration check
+      const oldId = localStorage.getItem('nutritionApp_deviceId');
+      if (oldId && oldId !== id) {
+        migrateUserData(oldId, id).then(() => {
+          localStorage.removeItem('nutritionApp_deviceId');
+          window.location.reload();
+        }).catch(console.error);
+        return; // Prevent further loading until reload
+      }
 
       fetchAllData(id).then((user) => {
       setProfile({
