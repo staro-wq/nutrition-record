@@ -490,10 +490,30 @@ export default function Dashboard() {
         image: mealImage
       };
 
-      const existingCatMeals = existingInfo.meals[mealCategory];
-      const updatedCatMeals = editingMealId 
-        ? existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m)
-        : [...existingCatMeals, newMealObj];
+      const existingCatMeals = existingInfo.meals[mealCategory] || [];
+      let updatedCatMeals;
+
+      if (editingMealId) {
+        updatedCatMeals = existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m);
+      } else {
+        if (mealCategory !== 'snack' && existingCatMeals.length > 0) {
+          const existingMeal = existingCatMeals[0];
+          updatedCatMeals = [{
+            ...existingMeal,
+            name: `${existingMeal.name}、${analysisResult.foodName || mealText.substring(0, 15) || "追加分"}`,
+            calories: existingMeal.calories + analysisResult.calories,
+            protein: existingMeal.protein + analysisResult.protein,
+            fat: existingMeal.fat + analysisResult.fat,
+            carbs: existingMeal.carbs + analysisResult.carbs,
+            iron: existingMeal.iron + analysisResult.iron,
+            vitaminC: existingMeal.vitaminC + analysisResult.vitaminC,
+            image: mealImage || existingMeal.image,
+            isUnanalyzed: false
+          }];
+        } else {
+          updatedCatMeals = [...existingCatMeals, newMealObj];
+        }
+      }
         
       const updatedMeals = {
         ...existingInfo.meals,
@@ -567,10 +587,25 @@ export default function Dashboard() {
         image: mealImage
       };
 
-      const existingCatMeals = existingInfo.meals[mealCategory];
-      const updatedCatMeals = editingMealId 
-        ? existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m)
-        : [...existingCatMeals, newMealObj];
+      const existingCatMeals = existingInfo.meals[mealCategory] || [];
+      let updatedCatMeals;
+
+      if (editingMealId) {
+        updatedCatMeals = existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m);
+      } else {
+        if (mealCategory !== 'snack' && existingCatMeals.length > 0) {
+          const existingMeal = existingCatMeals[0];
+          updatedCatMeals = [{
+            ...existingMeal,
+            name: `${existingMeal.name}、${mealText || "写真追加"}`,
+            image: mealImage || existingMeal.image,
+            // If the existing meal was fully analyzed, it becomes unanalyzed overall because we added unanalyzed food
+            isUnanalyzed: true
+          }];
+        } else {
+          updatedCatMeals = [...existingCatMeals, newMealObj];
+        }
+      }
         
       const updatedMeals = {
         ...existingInfo.meals,
