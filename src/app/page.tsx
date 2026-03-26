@@ -50,14 +50,36 @@ const YukushiMessage = ({ message }: { message: string }) => (
 interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; iron: number; vitaminC: number; isUnanalyzed?: boolean; image?: string | null; }
 interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory[]>; }
 
-const dummyHistory: Record<string, DailyHistory> = {};
-
 
 interface UserProfile { height: string; weight: string; goal: string; }
 
 export default function Dashboard() {
   const [activeTab, setActiveTab] = useState<Tab>('home');
-  const [historyData, setHistoryData] = useState<Record<string, DailyHistory>>(dummyHistory);
+  const [historyData, setHistoryData] = useState<Record<string, DailyHistory>>({});
+
+  const computedStreak = useMemo(() => {
+    let streak = 0;
+    const d = new Date();
+    while (true) {
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const log = historyData[dStr];
+      if (log && log.totalCalories > 0) {
+        streak++;
+        d.setDate(d.getDate() - 1);
+      } else {
+        const todayStr = (() => {
+          const t = new Date();
+          return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        })();
+        if (dStr === todayStr) {
+          d.setDate(d.getDate() - 1);
+        } else {
+          break;
+        }
+      }
+    }
+    return streak;
+  }, [historyData]);
   const [recordTargetDate, setRecordTargetDate] = useState<string>('today');
   
   // --- Profile State ---
@@ -87,7 +109,6 @@ export default function Dashboard() {
     iron: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0),
     vitaminC: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0),
   } : { calories: 0, protein: 0, fat: 0, carbs: 0, iron: 0, vitaminC: 0 };
-  const [streakDays, setStreakDays] = useState(0);
 
   // --- Persistent Storage (Server Actions DB) ---
   const [isLoaded, setIsLoaded] = useState(false);
@@ -114,7 +135,6 @@ export default function Dashboard() {
         goal: user.goal
       });
       setMode(user.mode as Mode);
-      setStreakDays(user.streak);
 
       const loadedHistory: Record<string, DailyHistory> = {};
       for (const log of user.DailyLogs) {
@@ -144,11 +164,28 @@ export default function Dashboard() {
     }
   }, [session, status, router]);
 
+  // --- Settings & Profile ---
+  const handleModeChange = (newMode: Mode) => {
+    setMode(newMode);
+    if (deviceId && isLoaded) {
+      syncProfile(deviceId, profile, newMode, computedStreak).catch(console.error);
+    }
+  };
+
+  const handleSaveSettings = () => {
+    // Assuming tempProfile is managed elsewhere for the settings modal
+    // For now, let's use the current profile state for the sync call
+    syncProfile(deviceId, profile, mode, computedStreak).then(() => {
+      // setProfile(tempProfile); // Uncomment if tempProfile is used
+      setIsSettingsModalOpen(false);
+    });
+  };
+
   useEffect(() => {
     if (isLoaded && deviceId) {
-      syncProfile(deviceId, profile, mode, streakDays).catch(console.error);
+      syncProfile(deviceId, profile, mode, computedStreak).catch(console.error);
     }
-  }, [profile, mode, streakDays, isLoaded, deviceId]);
+  }, [profile, mode, computedStreak, isLoaded, deviceId]);
 
   // Tracking historyData changes requires explicit syncDailyLog calls during mutations to avoid DB overload.
 
@@ -402,13 +439,8 @@ export default function Dashboard() {
     if (!analysisResult) return;
     
     const targetDate = recordTargetDate === 'today' ? todayDateStr : recordTargetDate;
-    const hasAnyMeal = historyData[targetDate] && Object.values(historyData[targetDate].meals).some(m => m !== null);
+    const hasAnyMeal = targetDate in historyData;
     
-    // Update streak if this is the very first meal being recorded for the target date
-    if (!hasAnyMeal) {
-      setStreakDays(s => s + 1);
-    }
-
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
         date: targetDate, score: 80, totalCalories: 0, status: 'achieved', advice: '新しく記録が追加されました！', 
@@ -485,9 +517,6 @@ export default function Dashboard() {
     const targetDate = recordTargetDate === 'today' ? todayDateStr : recordTargetDate;
     const hasAnyMeal = historyData[targetDate] && Object.values(historyData[targetDate].meals).some(m => m !== null);
     
-    if (!hasAnyMeal) {
-      setStreakDays(s => s + 1);
-    }
 
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
@@ -659,15 +688,15 @@ export default function Dashboard() {
               </div>
               <div className="bg-slate-100 p-1 rounded-full flex gap-1">
                 <button
-                  onClick={() => setMode('diet')}
+                  onClick={() => handleModeChange('diet')}
                   className={`px-4 py-1.5 text-xs font-medium rounded-full transition-all ${mode === 'diet' ? 'bg-white text-emerald-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >ダイエット</button>
                 <button
-                  onClick={() => setMode('health')}
+                  onClick={() => handleModeChange('health')}
                   className={`px-4 py-1.5 text-xs font-medium rounded-full transition-all ${mode === 'health' ? 'bg-white text-blue-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >健康維持</button>
                 <button
-                  onClick={() => setMode('muscle')}
+                  onClick={() => handleModeChange('muscle')}
                   className={`px-4 py-1.5 text-xs font-medium rounded-full transition-all ${mode === 'muscle' ? 'bg-white text-orange-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
                 >筋トレ</button>
               </div>
@@ -678,7 +707,7 @@ export default function Dashboard() {
               <div className="bg-orange-50 border border-orange-100 px-4 py-1.5 rounded-full flex items-center gap-1.5 shadow-sm">
                 <Flame size={18} className="text-orange-500 shrink-0 fill-orange-500" />
                 <span className="text-sm font-extrabold text-orange-600 tracking-tight">
-                  {streakDays}日連続クリア！
+                  {computedStreak}日連続クリア！
                 </span>
               </div>
             </div>
