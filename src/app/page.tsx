@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { fetchAllData, syncProfile, syncDailyLog, migrateUserData, forceMigrateAllData } from './actions';
+import { fetchAllData, syncProfile, syncDailyLog } from './actions';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine, PieChart, Pie, Cell, CartesianGrid } from 'recharts';
@@ -127,16 +127,6 @@ export default function Dashboard() {
     const id = (session?.user as any)?.id;
     if (id) {
       setDeviceId(id);
-
-      // Legacy user migration check
-      const oldId = localStorage.getItem('nutritionApp_deviceId');
-      if (oldId && oldId !== id) {
-        migrateUserData(oldId, id).then(() => {
-          localStorage.removeItem('nutritionApp_deviceId');
-          window.location.reload();
-        }).catch(console.error);
-        return; // Prevent further loading until reload
-      }
 
       fetchAllData(id).then((user) => {
       setProfile({
@@ -721,8 +711,14 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 font-sans pb-28">
-      
+    <div className="min-h-screen bg-slate-50 text-slate-900 pb-24 font-sans selection:bg-emerald-100 selection:text-emerald-900 overflow-x-hidden">
+      {/* --- Environment Indicator --- */}
+      {process.env.NEXT_PUBLIC_APP_ENV === 'staging' && (
+        <div className="bg-orange-500 text-white text-[10px] font-bold text-center py-1 sticky top-0 z-[100] tracking-widest uppercase shadow-sm">
+          Staging Environment - Test Only
+        </div>
+      )}
+
       {/* -------------------- HOME SCREEN -------------------- */}
       {activeTab === 'home' && (
         <div className="animate-in fade-in duration-300">
@@ -1023,18 +1019,24 @@ export default function Dashboard() {
               </div>
 
               <div>
-                <label className="text-sm font-bold text-slate-700 mb-3 block">メニュー名・材料など自由入力</label>
-                <textarea value={mealText} onChange={(e) => setMealText(e.target.value)} placeholder="例：鶏肉のサラダと玄米、お味噌汁" className="w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 min-h-[100px] text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all resize-none text-sm" />
-              </div>
-              {!mealImage ? (
-                <div className="flex gap-2">
-                  <label className="flex-1 flex items-center justify-center gap-2 border-2 border-dashed border-slate-200 rounded-2xl py-3 text-slate-400 hover:text-emerald-500 hover:bg-emerald-50 hover:border-emerald-200 transition-all cursor-pointer">
-                    <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
-                    <Camera size={18} />
-                    <span className="text-xs font-bold">写真を追加 (任意)</span>
-                  </label>
+                <div className="flex justify-between items-center mb-3">
+                  <label className="text-sm font-bold text-slate-700">メニュー名・材料など自由入力</label>
+                  {!mealImage && (
+                    <label className="flex items-center gap-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-lg hover:bg-emerald-100 cursor-pointer transition-colors">
+                      <input type="file" accept="image/*" className="hidden" onChange={handleImageUpload} />
+                      <Camera size={14} />
+                      <span>写真を追加</span>
+                    </label>
+                  )}
                 </div>
-              ) : (
+                <textarea 
+                  value={mealText} 
+                  onChange={(e) => setMealText(e.target.value)} 
+                  placeholder="例：鶏肉のサラダと玄米、お味噌汁" 
+                  className={`w-full bg-slate-50 border border-slate-200 rounded-2xl p-4 text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-emerald-500/30 focus:border-emerald-500 transition-all resize-none text-sm ${!mealImage ? 'min-h-[180px]' : 'min-h-[100px]'}`} 
+                />
+              </div>
+              {mealImage && (
                 <div className="relative w-full rounded-2xl overflow-hidden aspect-video bg-slate-100 border border-slate-200 shadow-sm">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={mealImage} alt="Meal preview" className="w-full h-full object-cover" />
@@ -1175,19 +1177,6 @@ export default function Dashboard() {
               </button>
 
               <div className="pt-6 mt-4 border-t border-slate-100">
-                <button onClick={async () => {
-                  if (confirm("【緊急用】全ての孤立した過去の履歴を、今のアカウントへ強制的に紐付けますか？（自分専用アプリの場合のみ実行してください）")) {
-                    try {
-                      await forceMigrateAllData(deviceId);
-                      alert("データを復旧しました！ページを自動で再読み込みします。");
-                      window.location.reload();
-                    } catch(e) {
-                      alert("エラーが発生しました: " + String(e));
-                    }
-                  }
-                }} className="w-full bg-orange-50 text-orange-600 font-bold rounded-2xl py-4 shadow-sm border border-orange-100 hover:bg-orange-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2 mb-3">
-                  <RefreshCw size={18} /> 過去の履歴を強制復旧する
-                </button>
                 <button onClick={() => signOut()} className="w-full bg-red-50 text-red-600 font-bold rounded-2xl py-4 shadow-sm border border-red-100 hover:bg-red-100 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
                   <LogOut size={18} /> ログアウト
                 </button>
