@@ -63,20 +63,22 @@ export async function syncDailyLog(userId: string, date: string, data: any, targ
   await prisma.meal.deleteMany({ where: { dailyLogId: log.id } });
 
   const mealCreates = [];
-  for (const [category, meal] of Object.entries(data.meals)) {
-    if (meal) {
-      const m = meal as any;
-      mealCreates.push({
-        dailyLogId: log.id,
-        category,
-        name: m.name,
-        calories: m.calories,
-        protein: m.protein,
-        fat: m.fat,
-        carbs: m.carbs,
-        isUnanalyzed: m.isUnanalyzed || false,
-        image: m.image || null
-      });
+  for (const [category, mealsArray] of Object.entries(data.meals)) {
+    if (Array.isArray(mealsArray)) {
+      for (const meal of mealsArray) {
+        const m = meal as any;
+        mealCreates.push({
+          dailyLogId: log.id,
+          category,
+          name: m.name,
+          calories: m.calories,
+          protein: m.protein,
+          fat: m.fat,
+          carbs: m.carbs,
+          isUnanalyzed: m.isUnanalyzed || false,
+          image: m.image || null
+        });
+      }
     }
   }
 

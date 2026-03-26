@@ -27,8 +27,8 @@ interface Macro {
 // ---------------------------------------------
 // DUMMY DATA FOR HISTORY SCREEN (Removed to start fresh)
 // ---------------------------------------------
-interface MealHistory { name: string; calories: number; protein: number; fat: number; carbs: number; isUnanalyzed?: boolean; image?: string | null; }
-interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory | null>; }
+interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; isUnanalyzed?: boolean; image?: string | null; }
+interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory[]>; }
 
 const dummyHistory: Record<string, DailyHistory> = {};
 
@@ -61,9 +61,9 @@ export default function Dashboard() {
   const todayHistory = historyData[todayDateStr];
   const consumed = todayHistory ? {
     calories: todayHistory.totalCalories,
-    protein: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.protein || 0), 0),
-    fat: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.fat || 0), 0),
-    carbs: Object.values(todayHistory.meals).reduce((sum, m) => sum + (m?.carbs || 0), 0),
+    protein: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0),
+    fat: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0),
+    carbs: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0),
   } : { calories: 0, protein: 0, fat: 0, carbs: 0 };
   const [streakDays, setStreakDays] = useState(0);
 
@@ -96,9 +96,9 @@ export default function Dashboard() {
 
       const loadedHistory: Record<string, DailyHistory> = {};
       for (const log of user.DailyLogs) {
-        const mealsObj: Record<MealCategory, MealHistory | null> = { breakfast: null, lunch: null, dinner: null, snack: null };
+        const mealsObj: Record<MealCategory, MealHistory[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
         for (const m of log.meals) {
-          mealsObj[m.category as MealCategory] = { ...m };
+          mealsObj[m.category as MealCategory].push({ ...m });
         }
         loadedHistory[log.date] = {
           date: log.date,
@@ -131,6 +131,7 @@ export default function Dashboard() {
   const [mealCategory, setMealCategory] = useState<MealCategory>('dinner');
   const [mealText, setMealText] = useState('');
   const [mealImage, setMealImage] = useState<string | null>(null);
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState<{ calories: number, protein: number, fat: number, carbs: number, foodName?: string } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
@@ -186,41 +187,38 @@ export default function Dashboard() {
   const circleCircumference = 2 * Math.PI * circleRadius;
   const strokeDashoffset = circleCircumference - (caloriePercent / 100) * circleCircumference;
 
-  const getAdvice = () => {
-    if (consumed.calories === 0) return "まだ今日の食事が記録されていません。画面下の「＋」ボタンから最初の食事を記録しましょう！";
-
-    const remCal = Math.max(0, currentTarget.calories - consumed.calories);
-    const remP = Math.max(0, currentTarget.protein - consumed.protein);
-    const remF = Math.max(0, currentTarget.fat - consumed.fat);
-    const remC = Math.max(0, currentTarget.carbs - consumed.carbs);
-
-    // Over-consumption check
-    if (consumed.calories > currentTarget.calories + 200) {
-      return "本日の目標カロリーを大きくオーバーしています。明日の食事を少し軽めにするか、有酸素運動を取り入れて調整しましょう！";
-    }
-    if (remCal === 0) {
-      if (remP > 10) return "カロリーは上限に達しましたが、タンパク質が不足しています。明日は脂質を抑えて高タンパクな食事を意識しましょう。";
-      return "本日の目標カロリーに到達しました！完璧なペースです。これ以上の摂取は控えて胃を休めましょう。";
-    }
-
-    // PFC Balance Analysis
+  const generateScoreAndAdvice = (totalCal: number, totalP: number, totalF: number, totalC: number) => {
+    const remCal = Math.max(0, currentTarget.calories - totalCal);
+    const remP = Math.max(0, currentTarget.protein - totalP);
+    const remF = Math.max(0, currentTarget.fat - totalF);
+    const remC = Math.max(0, currentTarget.carbs - totalC);
+    
     let advice = `あと ${remCal}kcal 食べられます。`;
 
-    if (remP > 30) {
-      advice += `タンパク質が大幅に不足（残り${remP}g）しています。プロテインや鶏むね肉、お刺身などの高タンパクな食材をガッツリ取り入れましょう。`;
-    } else if (remP > 10) {
-      if (remF < 10) {
-        advice += `タンパク質があと${remP}g必要ですが、脂質はほぼ上限です。ノンオイルのツナ缶やささみ、低脂質ヨーグルト等を追加しましょう。`;
-      } else {
-        advice += `ゆで卵や納豆などで、タンパク質をあと${remP}gほど微調整するのがおすすめです。`;
-      }
+    if (totalCal === 0) {
+      advice = 'まだ今日の食事が記録されていません。画面下の「＋」ボタンから最初の食事を記録しましょう！';
+    } else if (totalCal > currentTarget.calories + 200) {
+      advice = "本日の目標カロリーを大きくオーバーしています。明日の食事を少し軽めにするか、有酸素運動を取り入れて調整しましょう！";
+    } else if (remCal === 0) {
+      if (remP > 10) advice = "カロリーは上限に達しましたが、タンパク質が不足しています。明日は脂質を抑えて高タンパクな食事を意識しましょう。";
+      else advice = "本日の目標カロリーに到達しました！完璧なペースです。これ以上の摂取は控えて胃を休めましょう。";
     } else {
-      if (remF > 20 && remC > 50) {
-        advice += `タンパク質は十分です！残りはご飯や麺類などの炭水化物と、良質な脂質（アボカドやナッツ）でカロリーを満たしましょう。`;
-      } else if (remC > 40) {
-        advice += `タンパク質・脂質は十分です。和菓子やフルーツ、おにぎり等で炭水化物（あと${remC}g）だけを補給してエネルギーを満タンにしましょう！`;
+      if (remP > 30) {
+        advice = `タンパク質が大幅に不足（残り${remP}g）しています。プロテインや鶏むね肉、お刺身などの高タンパクな食材をガッツリ取り入れましょう。`;
+      } else if (remP > 10) {
+        if (remF < 10) {
+          advice = `タンパク質があと${remP}g必要ですが、脂質はほぼ上限です。ノンオイルのツナ缶やささみ、低脂質ヨーグルト等を追加しましょう。`;
+        } else {
+          advice = `ゆで卵や納豆などで、タンパク質をあと${remP}gほど微調整するのがおすすめです。`;
+        }
       } else {
-        advice += `PFCバランスはほぼ理想的です！残りのカロリーはなるべく野菜スープやサラダなど、ヘルシーな食事で満たしてください。`;
+        if (remF > 20 && remC > 50) {
+          advice = `タンパク質は十分です！残りはご飯や麺類などの炭水化物と、良質な脂質（アボカドやナッツ）でカロリーを満たしましょう。`;
+        } else if (remC > 40) {
+          advice = `タンパク質・脂質は十分です。和菓子やフルーツ、おにぎり等で炭水化物（あと${remC}g）だけを補給してエネルギーを満タンにしましょう！`;
+        } else {
+          advice = `PFCバランスはほぼ理想的です！残りのカロリーはなるべく野菜スープやサラダなど、ヘルシーな食事で満たしてください。`;
+        }
       }
     }
 
@@ -231,14 +229,20 @@ export default function Dashboard() {
     if (mode === 'muscle' && remCal > 800) {
        advice = `【増量アラート】まだ ${remCal}kcal も余っています！筋肥大のためにはカロリー摂取が必須です。餅やパスタ、プロテインなどで積極的に栄養を流し込んでください。`;
     }
-
-    return advice;
+    
+    const scoreRaw = totalCal > 0 ? Math.max(0, 100 - Math.abs((totalCal / currentTarget.calories) * 100 - 100) * 0.5) : 0;
+    
+    return {
+      score: Math.round(scoreRaw),
+      advice
+    };
   };
 
+  const getAdvice = () => generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs).advice;
+
   // Dynamically compute report data based on state
-  const reportDataScoreRaw = consumed.calories > 0 ? Math.max(0, 100 - Math.abs((consumed.calories / currentTarget.calories) * 100 - 100) * 0.5) : 0;
   const reportData = {
-    score: Math.round(reportDataScoreRaw),
+    score: generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs).score,
     advice: getAdvice(),
     targetCalories: currentTarget.calories,
     actualCalories: consumed.calories,
@@ -310,27 +314,45 @@ export default function Dashboard() {
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
         date: targetDate, score: 80, totalCalories: 0, status: 'achieved', advice: '新しく記録が追加されました！', 
-        meals: { breakfast: null, lunch: null, dinner: null, snack: null } 
+        meals: { breakfast: [], lunch: [], dinner: [], snack: [] } 
       };
-      const newTotal = existingInfo.totalCalories + analysisResult.calories;
+      
+      const newMealObj = {
+        id: editingMealId || crypto.randomUUID(),
+        name: analysisResult.foodName || mealText.substring(0, 15) || "記録",
+        calories: analysisResult.calories,
+        protein: analysisResult.protein,
+        fat: analysisResult.fat,
+        carbs: analysisResult.carbs,
+        isUnanalyzed: false,
+        image: mealImage
+      };
+
+      const existingCatMeals = existingInfo.meals[mealCategory];
+      const updatedCatMeals = editingMealId 
+        ? existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m)
+        : [...existingCatMeals, newMealObj];
+        
+      const updatedMeals = {
+        ...existingInfo.meals,
+        [mealCategory]: updatedCatMeals
+      };
+
+      const newTotal = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.calories || 0), 0);
+      const newTotalP = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
+      const newTotalF = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
+      const newTotalC = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
       const newStatus = newTotal > currentTarget.calories ? 'exceeded' : 'achieved';
+      
+      const { score, advice } = generateScoreAndAdvice(newTotal, newTotalP, newTotalF, newTotalC);
       
       const updatedInfo = {
         ...existingInfo,
         totalCalories: newTotal,
+        score,
+        advice,
         status: newStatus as 'achieved' | 'exceeded',
-        meals: {
-          ...existingInfo.meals,
-          [mealCategory]: {
-            name: analysisResult.foodName || mealText.substring(0, 15) || "記録",
-            calories: analysisResult.calories,
-            protein: analysisResult.protein,
-            fat: analysisResult.fat,
-            carbs: analysisResult.carbs,
-            isUnanalyzed: false,
-            image: mealImage
-          }
-        }
+        meals: updatedMeals
       };
       
       syncDailyLog(deviceId, targetDate, updatedInfo, currentTarget.calories).catch(console.error);
@@ -347,6 +369,7 @@ export default function Dashboard() {
       setMealText('');
       setAnalysisResult(null);
       setMealCategory('dinner');
+      setEditingMealId(null);
       if (recordTargetDate === 'today') {
         setActiveTab('home'); 
       }
@@ -367,23 +390,34 @@ export default function Dashboard() {
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
         date: targetDate, score: 80, totalCalories: 0, status: 'empty', advice: '未解析の食事が含まれており正確なスコアが出せません。', 
-        meals: { breakfast: null, lunch: null, dinner: null, snack: null } 
+        meals: { breakfast: [], lunch: [], dinner: [], snack: [] } 
       };
       
+      const newMealObj = {
+        id: editingMealId || crypto.randomUUID(),
+        name: mealText || "写真の記録",
+        calories: 0,
+        protein: 0,
+        fat: 0,
+        carbs: 0,
+        isUnanalyzed: true,
+        image: mealImage
+      };
+
+      const existingCatMeals = existingInfo.meals[mealCategory];
+      const updatedCatMeals = editingMealId 
+        ? existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m)
+        : [...existingCatMeals, newMealObj];
+        
+      const updatedMeals = {
+        ...existingInfo.meals,
+        [mealCategory]: updatedCatMeals
+      };
+
       const updatedInfo = {
         ...existingInfo,
-        meals: {
-          ...existingInfo.meals,
-          [mealCategory]: {
-            name: mealText || "写真の記録",
-            calories: 0,
-            protein: 0,
-            fat: 0,
-            carbs: 0,
-            isUnanalyzed: true,
-            image: mealImage
-          }
-        }
+        advice: '未解析の食事が含まれており正確なスコアが出せません。',
+        meals: updatedMeals
       };
 
       syncDailyLog(deviceId, targetDate, updatedInfo, currentTarget.calories).catch(console.error);
@@ -400,6 +434,7 @@ export default function Dashboard() {
       setMealText('');
       setAnalysisResult(null);
       setMealCategory('dinner');
+      setEditingMealId(null);
       if (recordTargetDate === 'today') {
         setActiveTab('home'); 
       }
@@ -407,30 +442,39 @@ export default function Dashboard() {
     }, 300);
   };
 
-  const triggerAnalysisForMeal = (date: string, cat: MealCategory, text: string, img?: string | null) => {
+  const triggerAnalysisForMeal = (date: string, cat: MealCategory, text: string, img?: string | null, mealId?: string) => {
     setRecordTargetDate(date);
     setMealCategory(cat);
     setMealText(text);
     if (img) setMealImage(img);
+    setEditingMealId(mealId || null);
     setSelectedDateDetails(null);
     setIsRecordModalOpen(true);
   };
 
-  const handleDeleteMeal = (date: string, cat: MealCategory) => {
+  const handleDeleteMeal = (date: string, cat: MealCategory, mealId: string) => {
     if (!window.confirm('この食事記録を削除してもよろしいですか？')) return;
     
     setHistoryData(prev => {
       const existingInfo = prev[date];
       if (!existingInfo) return prev;
       
-      const newMeals = { ...existingInfo.meals, [cat]: null };
+      const newMealsForCat = existingInfo.meals[cat].filter(m => m.id !== mealId);
+      const newMeals = { ...existingInfo.meals, [cat]: newMealsForCat };
       
       // Recalculate daily totals
-      const newCalories = Object.values(newMeals).reduce((sum, m) => sum + (m?.calories || 0), 0);
+      const newCalories = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.calories || 0), 0);
+      const newTotalP = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
+      const newTotalF = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
+      const newTotalC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+      
+      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC);
       
       const updatedInfo = {
         ...existingInfo,
         totalCalories: newCalories,
+        score,
+        advice,
         meals: newMeals
       };
 
@@ -442,9 +486,15 @@ export default function Dashboard() {
     // Also update selectedDateDetails so the drawer updates immediately without closing
     setSelectedDateDetails(prev => {
       if (!prev || prev.date !== date) return prev;
-      const newMeals = { ...prev.meals, [cat]: null };
-      const newCalories = Object.values(newMeals).reduce((sum, m) => sum + (m?.calories || 0), 0);
-      return { ...prev, totalCalories: newCalories, meals: newMeals };
+      const newMealsForCat = prev.meals[cat].filter(m => m.id !== mealId);
+      const newMeals = { ...prev.meals, [cat]: newMealsForCat };
+      const newCalories = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.calories || 0), 0);
+      const newTotalP = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
+      const newTotalF = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
+      const newTotalC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC);
+      
+      return { ...prev, totalCalories: newCalories, score, advice, meals: newMeals };
     });
   };
 
@@ -844,7 +894,7 @@ export default function Dashboard() {
                     </div>
                     <button onClick={handleRecord} className="w-full bg-slate-900 text-white font-bold rounded-2xl py-4 shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
                        <CheckCircle2 size={20} className="text-slate-300" />
-                       {(historyData[recordTargetDate === 'today' ? todayDateStr : recordTargetDate]?.meals[mealCategory] !== null) ? `${({ breakfast: '朝食', lunch: '昼食', dinner: '夕食', snack: '間食' })[mealCategory]}をさらに追加する` : 'この内容で記録する'}
+                       {(historyData[recordTargetDate === 'today' ? todayDateStr : recordTargetDate]?.meals[mealCategory]?.length > 0 && !editingMealId) ? `${({ breakfast: '朝食', lunch: '昼食', dinner: '夕食', snack: '間食' })[mealCategory]}をさらに追加する` : 'この内容で記録する'}
                     </button>
                   </div>
                 )}
@@ -882,22 +932,22 @@ export default function Dashboard() {
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 text-sm">食事内容</h3>
                 {([ { id: 'breakfast', label: '朝食', icon: '🌅' }, { id: 'lunch', label: '昼食', icon: '☀️' }, { id: 'dinner', label: '夕食', icon: '🌙' }, { id: 'snack', label: '間食', icon: '🍪' }, ] as const).map((cat) => {
-                  const meal = selectedDateDetails.meals[cat.id];
-                  if (!meal) return null;
-                  return (
-                    <div key={cat.id} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col gap-3">
+                  const mealsForCat = selectedDateDetails.meals[cat.id];
+                  if (!mealsForCat || mealsForCat.length === 0) return null;
+                  return mealsForCat.map((meal, index) => (
+                    <div key={`${cat.id}-${meal.id || index}`} className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm flex flex-col gap-3">
                       <div className="flex justify-between items-start">
-                        <div className="flex gap-2 items-center"><span className="text-lg">{cat.icon}</span><div><span className="text-xs font-bold text-slate-500 block">{cat.label}</span><span className="text-sm font-extrabold text-slate-800">{meal.name}</span></div></div>
+                        <div className="flex gap-2 items-center"><span className="text-lg">{cat.icon}</span><div><span className="text-xs font-bold text-slate-500 block">{cat.label} {mealsForCat.length > 1 ? index + 1 : ''}</span><span className="text-sm font-extrabold text-slate-800">{meal.name}</span></div></div>
                         <div className="flex items-center gap-1">
                           {meal.isUnanalyzed ? (
-                            <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1 mr-1">
+                            <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image, meal.id)} className="text-[10px] bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md font-bold hover:bg-emerald-200 transition-colors flex items-center gap-1 mr-1">
                               <Sparkles size={12} /> 解析
                             </button>
                           ) : (
                             <span className="text-sm font-extrabold text-slate-800 bg-slate-50 py-1 px-2 rounded-lg mr-1">{meal.calories}<span className="text-[10px] text-slate-500 ml-0.5">kcal</span></span>
                           )}
-                          <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"><Edit2 size={16} /></button>
-                          <button onClick={() => handleDeleteMeal(selectedDateDetails.date, cat.id)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={16} /></button>
+                          <button onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image, meal.id)} className="p-1.5 text-slate-400 hover:text-blue-500 hover:bg-blue-50 rounded-md transition-colors"><Edit2 size={16} /></button>
+                          <button onClick={() => handleDeleteMeal(selectedDateDetails.date, cat.id, meal.id!)} className="p-1.5 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors"><Trash2 size={16} /></button>
                         </div>
                       </div>
                       {!meal.isUnanalyzed && (
@@ -911,10 +961,10 @@ export default function Dashboard() {
                           <img src={meal.image} alt="Meal" className="w-full h-full object-cover" />
                         </div>
                       ) : (
-                        <div className="w-full h-20 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer rounded-xl flex items-center justify-center border border-slate-100 mt-1" onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image)}><div className="flex flex-col items-center gap-1 text-slate-300"><ImageIcon size={18} /><span className="text-[10px] font-bold">写真</span></div></div>
+                        <div className="w-full h-20 bg-slate-50 hover:bg-slate-100 transition-colors cursor-pointer rounded-xl flex items-center justify-center border border-slate-100 mt-1" onClick={() => triggerAnalysisForMeal(selectedDateDetails.date, cat.id, meal.name, meal.image, meal.id)}><div className="flex flex-col items-center gap-1 text-slate-300"><ImageIcon size={18} /><span className="text-[10px] font-bold">写真追加</span></div></div>
                       )}
                     </div>
-                  );
+                  ));
                 })}
               </div>
             </div>
