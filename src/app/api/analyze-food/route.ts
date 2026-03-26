@@ -28,8 +28,16 @@ const nutritionSchema: Schema = {
       type: SchemaType.NUMBER,
       description: "推定される炭水化物量 (g)",
     },
+    iron: {
+      type: SchemaType.NUMBER,
+      description: "推定される鉄分 (mg)",
+    },
+    vitaminC: {
+      type: SchemaType.NUMBER,
+      description: "推定されるビタミンC (mg)",
+    },
   },
-  required: ["foodName", "calories", "protein", "fat", "carbs"],
+  required: ["foodName", "calories", "protein", "fat", "carbs", "iron", "vitaminC"],
 };
 
 export async function POST(req: Request) {

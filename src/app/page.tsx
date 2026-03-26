@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { fetchAllData, syncProfile, syncDailyLog } from './actions';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -25,9 +25,29 @@ interface Macro {
 
 
 // ---------------------------------------------
+// YUKUSHI CHARACTER COMPONENT
+// ---------------------------------------------
+const YukushiMessage = ({ message }: { message: string }) => (
+  <div className="flex items-start gap-4 animate-in fade-in duration-500">
+    <div className="shrink-0 pt-1">
+      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center text-2xl shadow-sm border border-slate-100 relative">
+        🐑
+        <div className="absolute -bottom-1 -right-1 bg-emerald-100 text-emerald-600 rounded-full p-0.5"><Sparkles size={10} /></div>
+      </div>
+      <div className="text-[9px] font-black text-slate-400 text-center mt-1">ゆくし</div>
+    </div>
+    <div className="relative bg-white rounded-2xl rounded-tl-sm p-4 shadow-sm border border-slate-100 flex-1">
+      <div className="absolute top-3 -left-2 w-0 h-0 border-y-8 border-y-transparent border-r-[10px] border-r-white z-10"></div>
+      <div className="absolute top-3 -left-[9px] w-0 h-0 border-y-8 border-y-transparent border-r-[10px] border-r-slate-100"></div>
+      <p className="text-sm font-bold text-slate-700 leading-relaxed">{message.replace(/。/g, "メェ。").replace(/！/g, "メェ！").replace(/です/g, "ですメェ").replace(/ましょう/g, "ましょうメェ")}</p>
+    </div>
+  </div>
+);
+
+// ---------------------------------------------
 // DUMMY DATA FOR HISTORY SCREEN (Removed to start fresh)
 // ---------------------------------------------
-interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; isUnanalyzed?: boolean; image?: string | null; }
+interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; iron: number; vitaminC: number; isUnanalyzed?: boolean; image?: string | null; }
 interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory[]>; }
 
 const dummyHistory: Record<string, DailyHistory> = {};
@@ -64,7 +84,9 @@ export default function Dashboard() {
     protein: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0),
     fat: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0),
     carbs: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0),
-  } : { calories: 0, protein: 0, fat: 0, carbs: 0 };
+    iron: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0),
+    vitaminC: Object.values(todayHistory.meals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0),
+  } : { calories: 0, protein: 0, fat: 0, carbs: 0, iron: 0, vitaminC: 0 };
   const [streakDays, setStreakDays] = useState(0);
 
   // --- Persistent Storage (Server Actions DB) ---
@@ -98,7 +120,11 @@ export default function Dashboard() {
       for (const log of user.DailyLogs) {
         const mealsObj: Record<MealCategory, MealHistory[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
         for (const m of log.meals) {
-          mealsObj[m.category as MealCategory].push({ ...m });
+          mealsObj[m.category as MealCategory].push({
+            ...m,
+            iron: (m as any).iron || 0,
+            vitaminC: (m as any).vitaminC || 0
+          });
         }
         loadedHistory[log.date] = {
           date: log.date,
@@ -133,7 +159,7 @@ export default function Dashboard() {
   const [mealImage, setMealImage] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<{ calories: number, protein: number, fat: number, carbs: number, foodName?: string } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{ calories: number, protein: number, fat: number, carbs: number, iron: number, vitaminC: number, foodName?: string } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // --- Calendar Date State ---
@@ -187,7 +213,7 @@ export default function Dashboard() {
   const circleCircumference = 2 * Math.PI * circleRadius;
   const strokeDashoffset = circleCircumference - (caloriePercent / 100) * circleCircumference;
 
-  const generateScoreAndAdvice = (totalCal: number, totalP: number, totalF: number, totalC: number) => {
+  const generateScoreAndAdvice = (totalCal: number, totalP: number, totalF: number, totalC: number, totalIron: number = 0, totalVC: number = 0) => {
     const remCal = Math.max(0, currentTarget.calories - totalCal);
     const remP = Math.max(0, currentTarget.protein - totalP);
     const remF = Math.max(0, currentTarget.fat - totalF);
@@ -222,6 +248,13 @@ export default function Dashboard() {
       }
     }
 
+    if (totalIron < 5 && totalCal > 300) {
+      advice += ` 鉄分が不足気味（現在${totalIron}mg）です。ほうれん草やレバー、赤身肉などを意識して取り入れてみてください。`;
+    }
+    if (totalVC < 30 && totalCal > 300) {
+      advice += ` ビタミンCが不足気味（現在${totalVC}mg）です。ブロッコリーやキウイ、柑橘類などをデザートに追加すると良いですね。`;
+    }
+
     if (mode === 'diet' && remCal < 300 && remP > 15) {
        advice = `【減量警告】カロリー残量が少ない（残り${remCal}kcal）のにタンパク質が不足（残り${remP}g）しています！プロテインアイソレート（WPI）などで純粋にタンパク質だけを補給してください。`;
     }
@@ -238,11 +271,11 @@ export default function Dashboard() {
     };
   };
 
-  const getAdvice = () => generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs).advice;
+  const getAdvice = () => generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs, consumed.iron, consumed.vitaminC).advice;
 
   // Dynamically compute report data based on state
   const reportData = {
-    score: generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs).score,
+    score: generateScoreAndAdvice(consumed.calories, consumed.protein, consumed.fat, consumed.carbs, consumed.iron, consumed.vitaminC).score,
     advice: getAdvice(),
     targetCalories: currentTarget.calories,
     actualCalories: consumed.calories,
@@ -250,11 +283,74 @@ export default function Dashboard() {
       { name: 'タンパク質', value: consumed.protein || 1, fill: '#3b82f6', ideal: '25%' }, 
       { name: '脂質', value: consumed.fat || 1, fill: '#fbbf24', ideal: '20%' },      
       { name: '炭水化物', value: consumed.carbs || 1, fill: '#10b981', ideal: '55%' }   
-    ],
-    meals: [] as Array<{ id: string, time: string, name: string, calories: number, eval: 'good' | 'warning' | 'average', comment: string }>
+    ]
   };
   const totalPFC = reportData.pfc.reduce((acc, item) => acc + item.value, 0);
-  const calorieChartData = [{ name: '本日', 摂取カロリー: reportData.actualCalories }];
+
+  // Generate Weekly Data (Last 7 days)
+  const weeklyReport = useMemo(() => {
+    const data = [];
+    let totalScore = 0;
+    let daysWithRecord = 0;
+    let totalP = 0, totalF = 0, totalC = 0;
+    
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      const history = historyData[dateStr];
+      
+      data.push({
+        name: i === 0 ? '本日' : `${d.getMonth() + 1}/${d.getDate()}`,
+        摂取カロリー: history ? history.totalCalories : 0
+      });
+
+      if (history && history.totalCalories > 0) {
+        totalScore += history.score || 0;
+        daysWithRecord++;
+        if (history.meals) {
+          totalP += Object.values(history.meals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
+          totalF += Object.values(history.meals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
+          totalC += Object.values(history.meals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+        }
+      }
+    }
+    
+    const avgScore = daysWithRecord > 0 ? Math.round(totalScore / daysWithRecord) : 0;
+    const weeklyPFC = [
+      { name: 'タンパク質', value: totalP || 1, fill: '#3b82f6', ideal: '25%' }, 
+      { name: '脂質', value: totalF || 1, fill: '#fbbf24', ideal: '20%' },      
+      { name: '炭水化物', value: totalC || 1, fill: '#10b981', ideal: '55%' }   
+    ];
+    const weeklyTotalPFC = weeklyPFC.reduce((acc, item) => acc + item.value, 0);
+    
+    return { data, avgScore, weeklyPFC, daysWithRecord, weeklyTotalPFC };
+  }, [historyData]);
+
+  // Generate Today's Meal Evaluations
+  const todayMealsList = useMemo(() => {
+    const list: Array<{ id: string, time: string, name: string, calories: number, eval: 'good' | 'warning' | 'average', comment: string }> = [];
+    if (!todayHistory) return list;
+    for (const [cat, meals] of Object.entries(todayHistory.meals)) {
+      if (Array.isArray(meals)) {
+        meals.forEach((m, idx) => {
+          if (!m || m.isUnanalyzed) return;
+          const evaluation = m.calories > 800 ? 'warning' : m.calories > 500 ? 'average' : 'good';
+          const comment = m.calories > 800 ? 'カロリーが高めでした。次の食事で調整しましょう。' : m.calories > 500 ? 'しっかりエネルギー補給できました。' : '適度なカロリーで抑えられています。';
+          const catLabel = cat === 'breakfast' ? '朝食' : cat === 'lunch' ? '昼食' : cat === 'dinner' ? '夕食' : '間食';
+          list.push({
+            id: m.id || `${cat}-${idx}`,
+            time: catLabel + (meals.length > 1 ? ` ${idx + 1}` : ''),
+            name: m.name,
+            calories: m.calories,
+            eval: evaluation,
+            comment
+          });
+        });
+      }
+    }
+    return list;
+  }, [todayHistory]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -292,6 +388,8 @@ export default function Dashboard() {
         protein: data.protein,
         fat: data.fat,
         carbs: data.carbs,
+        iron: data.iron,
+        vitaminC: data.vitaminC,
       });
     } catch (err: unknown) {
       setAnalysisError(err instanceof Error ? err.message : 'AIとの通信エラーが発生しました');
@@ -324,6 +422,8 @@ export default function Dashboard() {
         protein: analysisResult.protein,
         fat: analysisResult.fat,
         carbs: analysisResult.carbs,
+        iron: analysisResult.iron,
+        vitaminC: analysisResult.vitaminC,
         isUnanalyzed: false,
         image: mealImage
       };
@@ -342,9 +442,11 @@ export default function Dashboard() {
       const newTotalP = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
       const newTotalF = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
       const newTotalC = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+      const newTotalIron = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0);
+      const newTotalVC = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0);
       const newStatus = newTotal > currentTarget.calories ? 'exceeded' : 'achieved';
       
-      const { score, advice } = generateScoreAndAdvice(newTotal, newTotalP, newTotalF, newTotalC);
+      const { score, advice } = generateScoreAndAdvice(newTotal, newTotalP, newTotalF, newTotalC, newTotalIron, newTotalVC);
       
       const updatedInfo = {
         ...existingInfo,
@@ -400,6 +502,8 @@ export default function Dashboard() {
         protein: 0,
         fat: 0,
         carbs: 0,
+        iron: 0,
+        vitaminC: 0,
         isUnanalyzed: true,
         image: mealImage
       };
@@ -467,8 +571,10 @@ export default function Dashboard() {
       const newTotalP = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
       const newTotalF = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
       const newTotalC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+      const newTotalIron = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0);
+      const newTotalVC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0);
       
-      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC);
+      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC, newTotalIron, newTotalVC);
       
       const updatedInfo = {
         ...existingInfo,
@@ -492,7 +598,9 @@ export default function Dashboard() {
       const newTotalP = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
       const newTotalF = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
       const newTotalC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
-      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC);
+      const newTotalIron = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0);
+      const newTotalVC = Object.values(newMeals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0);
+      const { score, advice } = generateScoreAndAdvice(newCalories, newTotalP, newTotalF, newTotalC, newTotalIron, newTotalVC);
       
       return { ...prev, totalCalories: newCalories, score, advice, meals: newMeals };
     });
@@ -511,18 +619,19 @@ export default function Dashboard() {
 
   // Custom Legend for PFC
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const renderPFCLegend = (props: any) => {
+  const renderPFCLegend = (props: any, baseTotalPFC: number, pfcArray: any[]) => {
     const { payload } = props;
+    if (!payload) return null;
     return (
       <ul className="flex flex-col gap-2 mt-2 w-full pl-4 border-l border-slate-100">
         {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
         {payload.map((entry: any, index: number) => {
-          const item = reportData.pfc[index];
-          const actualPercent = Math.round((item.value / totalPFC) * 100);
+          const item = pfcArray[index];
+          const actualPercent = Math.round((item.value / baseTotalPFC) * 100) || 0;
           return (
             <li key={`item-${index}`} className="flex items-center text-xs text-slate-700">
               <span className="w-2.5 h-2.5 rounded-full mr-2" style={{ backgroundColor: entry.color }} />
-              <span className="font-bold w-16">{entry.value}</span>
+              <span className="font-bold w-16 truncate">{entry.value}</span>
               <span className="font-extrabold text-slate-900 w-10 text-right">{actualPercent}%</span>
               <span className="text-[10px] text-slate-400 ml-2">({item.ideal} 理想)</span>
             </li>
@@ -594,15 +703,7 @@ export default function Dashboard() {
           </header>
 
           <main className="px-6 space-y-6">
-            <div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-100 flex items-start gap-4 transition-all duration-500">
-              <div className={`p-2 rounded-xl mt-1 shrink-0 ${caloriePercent >= 100 ? 'bg-red-50 text-red-600' : mode === 'diet' ? 'bg-emerald-50 text-emerald-600' : mode === 'health' ? 'bg-blue-50 text-blue-600' : 'bg-orange-50 text-orange-600'}`}>
-                <Info size={20} />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 mb-1">逆算アドバイス</h3>
-                <p className="text-sm text-slate-600 leading-relaxed font-medium">{getAdvice()}</p>
-              </div>
-            </div>
+            <YukushiMessage message={getAdvice()} />
 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
               <h3 className="text-sm font-bold text-slate-800 mb-5">栄養素バランス（PFC）</h3>
@@ -627,6 +728,37 @@ export default function Dashboard() {
                 })}
               </div>
             </div>
+
+            {/* Meal Evaluations (Moved from Report Tab) */}
+            {todayMealsList.length > 0 && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                <h3 className="text-sm font-extrabold text-slate-800 mb-5 flex items-center gap-2">
+                  <div className="w-2 h-5 bg-orange-400 rounded-full"/>本日の食事評価
+                </h3>
+                <div className="space-y-3">
+                  {todayMealsList.map((meal: any) => {
+                    const Icon = meal.eval === 'good' ? Smile : meal.eval === 'warning' ? AlertTriangle : CheckCircle;
+                    const colorClass = meal.eval === 'good' ? 'text-emerald-500 bg-emerald-50' : meal.eval === 'warning' ? 'text-amber-500 bg-amber-50' : 'text-blue-500 bg-blue-50';
+                    
+                    return (
+                       <div key={meal.id} className="flex items-center p-3 rounded-2xl border border-slate-100 shadow-sm gap-4 transition-all hover:bg-slate-50">
+                          <div className={`p-3 rounded-xl ${colorClass}`}>
+                            <Icon size={22} strokeWidth={2.5} />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex justify-between items-baseline mb-1">
+                              <span className="text-xs font-bold text-slate-400">{meal.time}</span>
+                              <span className="text-sm font-extrabold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">{meal.calories}<span className="text-[10px] text-slate-500 ml-0.5">kcal</span></span>
+                            </div>
+                            <span className="text-sm font-bold text-slate-700 block">{meal.name}</span>
+                            <span className="text-xs font-semibold text-slate-500 mt-1 block">{meal.comment}</span>
+                          </div>
+                       </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
           </main>
         </div>
       )}
@@ -685,19 +817,19 @@ export default function Dashboard() {
       {activeTab === 'report' && (
         <div className="animate-in fade-in duration-300">
           <header className="bg-white px-6 pt-8 pb-6 mb-6 shadow-sm rounded-b-[2.5rem]">
-            <h1 className="text-xl font-extrabold tracking-tight text-slate-800 mb-8 text-center">1日の総評サマリー</h1>
+            <h1 className="text-xl font-extrabold tracking-tight text-slate-800 mb-8 text-center">週間レポート</h1>
             
             {/* Score Ring */}
             <div className="flex justify-center mb-8 relative">
               <div className="relative w-52 h-52 flex items-center justify-center">
                 <svg className="w-full h-full transform -rotate-90 drop-shadow-sm">
                   <circle cx="104" cy="104" r="90" stroke="currentColor" strokeWidth="18" fill="transparent" className="text-slate-50" />
-                  <circle cx="104" cy="104" r="90" stroke="currentColor" strokeWidth="18" fill="transparent" strokeDasharray={2 * Math.PI * 90} strokeDashoffset={(2 * Math.PI * 90) - ((reportData.score / 100) * (2 * Math.PI * 90))} strokeLinecap="round" className="text-emerald-500 transition-all duration-1000 ease-out" />
+                  <circle cx="104" cy="104" r="90" stroke="currentColor" strokeWidth="18" fill="transparent" strokeDasharray={2 * Math.PI * 90} strokeDashoffset={(2 * Math.PI * 90) - ((weeklyReport.avgScore / 100) * (2 * Math.PI * 90))} strokeLinecap="round" className="text-emerald-500 transition-all duration-1000 ease-out" />
                 </svg>
                 <div className="absolute flex flex-col items-center justify-center text-center">
-                  <span className="text-xs font-bold text-emerald-600 mb-1">総合スコア</span>
+                  <span className="text-xs font-bold text-emerald-600 mb-1">週間平均スコア</span>
                   <div className="flex items-baseline gap-1">
-                    <span className="text-6xl font-black tracking-tighter text-slate-800">{consumed.calories > 0 ? reportData.score : '-'}</span>
+                    <span className="text-6xl font-black tracking-tighter text-slate-800">{weeklyReport.daysWithRecord > 0 ? weeklyReport.avgScore : '-'}</span>
                     <span className="text-xl font-bold text-slate-400">/100</span>
                   </div>
                 </div>
@@ -705,9 +837,8 @@ export default function Dashboard() {
             </div>
 
             {/* Advice panel */}
-            <div className="bg-emerald-50/50 border border-emerald-100 rounded-2xl p-4 flex gap-3 text-emerald-800 text-sm font-semibold leading-relaxed mx-2">
-              <Sparkles size={20} className="text-emerald-500 shrink-0 mt-0.5" />
-              <p>{reportData.advice}</p>
+            <div className="px-2">
+              <YukushiMessage message={weeklyReport.daysWithRecord > 0 ? `過去7日間で ${weeklyReport.daysWithRecord}日 記録できました！継続は力なりです。` : '過去7日間の記録がありません。毎日の食事を記録して、一週間の変化や傾向をグラフで確認しましょう！'} />
             </div>
           </header>
 
@@ -715,16 +846,16 @@ export default function Dashboard() {
             {/* Calorie Bar Chart */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
               <h3 className="text-sm font-extrabold text-slate-800 mb-6 flex items-center gap-2">
-                <div className="w-2 h-5 bg-blue-500 rounded-full"/>カロリー比較
+                <div className="w-2 h-5 bg-blue-500 rounded-full"/>週間カロリー推移
               </h3>
               <div className="h-44 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={calorieChartData} margin={{ top: 20, right: 30, left: -20, bottom: 0 }} barSize={60}>
+                  <BarChart data={weeklyReport.data} margin={{ top: 20, right: 30, left: -20, bottom: 0 }} barSize={30}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#64748b', fontWeight: 600 }} dy={10} />
+                    <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#64748b', fontWeight: 600 }} dy={10} />
                     <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 10, fill: '#94a3b8' }} />
                     <Tooltip cursor={{fill: 'transparent'}} contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 15px rgba(0,0,0,0.1)' }} />
-                    <ReferenceLine y={reportData.targetCalories} stroke="#fbbf24" strokeDasharray="5 5" strokeWidth={2} label={{ position: 'top', value: `目標 ${reportData.targetCalories}kcal`, fill: '#fbbf24', fontSize: 10, fontWeight: 700 }} />
+                    <ReferenceLine y={currentTarget.calories} stroke="#fbbf24" strokeDasharray="5 5" strokeWidth={2} label={{ position: 'top', value: `目標`, fill: '#fbbf24', fontSize: 10, fontWeight: 700 }} />
                     <Bar dataKey="摂取カロリー" fill="#3b82f6" radius={[6, 6, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
@@ -734,14 +865,14 @@ export default function Dashboard() {
             {/* PFC Balance Donut Chart */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
               <h3 className="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
-                <div className="w-2 h-5 bg-emerald-500 rounded-full"/>PFCバランス
+                <div className="w-2 h-5 bg-emerald-500 rounded-full"/>週間PFC平均バランス
               </h3>
               <div className="flex items-center h-40 w-full relative">
                 <div className="w-1/2 h-full relative">
                   <ResponsiveContainer width="100%" height="100%">
                     <PieChart>
                       <Pie
-                        data={reportData.pfc}
+                        data={weeklyReport.weeklyPFC}
                         cx="50%" cy="50%"
                         innerRadius={45}
                         outerRadius={65}
@@ -749,7 +880,7 @@ export default function Dashboard() {
                         dataKey="value"
                         stroke="none"
                       >
-                        {reportData.pfc.map((entry, index) => (
+                        {weeklyReport.weeklyPFC.map((entry: any, index: number) => (
                           <Cell key={`cell-${index}`} fill={entry.fill} />
                         ))}
                       </Pie>
@@ -760,37 +891,8 @@ export default function Dashboard() {
                   </div>
                 </div>
                 <div className="w-1/2">
-                   {renderPFCLegend({payload: reportData.pfc})}
+                   {renderPFCLegend({payload: weeklyReport.weeklyPFC}, weeklyReport.weeklyTotalPFC, weeklyReport.weeklyPFC)}
                 </div>
-              </div>
-            </div>
-
-            {/* Meal Evaluations */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
-              <h3 className="text-sm font-extrabold text-slate-800 mb-5 flex items-center gap-2">
-                <div className="w-2 h-5 bg-orange-400 rounded-full"/>毎食ごとの評価
-              </h3>
-              <div className="space-y-3">
-                {reportData.meals.map(meal => {
-                  const Icon = meal.eval === 'good' ? Smile : meal.eval === 'warning' ? AlertTriangle : CheckCircle;
-                  const colorClass = meal.eval === 'good' ? 'text-emerald-500 bg-emerald-50' : meal.eval === 'warning' ? 'text-amber-500 bg-amber-50' : 'text-blue-500 bg-blue-50';
-                  
-                  return (
-                     <div key={meal.id} className="flex items-center p-3 rounded-2xl border border-slate-100 shadow-sm gap-4 transition-all hover:bg-slate-50">
-                        <div className={`p-3 rounded-xl ${colorClass}`}>
-                          <Icon size={22} strokeWidth={2.5} />
-                        </div>
-                        <div className="flex-1">
-                          <div className="flex justify-between items-baseline mb-1">
-                            <span className="text-xs font-bold text-slate-400">{meal.time}</span>
-                            <span className="text-sm font-extrabold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-md">{meal.calories}<span className="text-[10px] text-slate-500 ml-0.5">kcal</span></span>
-                          </div>
-                          <span className="text-sm font-bold text-slate-700 block">{meal.name}</span>
-                          <span className="text-xs font-semibold text-slate-500 mt-1 block">{meal.comment}</span>
-                        </div>
-                     </div>
-                  )
-                })}
               </div>
             </div>
           </main>

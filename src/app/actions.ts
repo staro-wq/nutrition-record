@@ -75,6 +75,8 @@ export async function syncDailyLog(userId: string, date: string, data: any, targ
           protein: m.protein,
           fat: m.fat,
           carbs: m.carbs,
+          iron: m.iron || 0,
+          vitaminC: m.vitaminC || 0,
           isUnanalyzed: m.isUnanalyzed || false,
           image: m.image || null
         });

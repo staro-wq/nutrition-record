@@ -43,6 +43,8 @@ model Meal {
   protein      Int
   fat          Int
   carbs        Int
+  iron         Float    @default(0)
+  vitaminC     Float    @default(0)
   isUnanalyzed Boolean  @default(false)
   image        String?
   dailyLog     DailyLog @relation(fields: [dailyLogId], references: [id])
