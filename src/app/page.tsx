@@ -367,6 +367,39 @@ export default function Dashboard() {
     return { data, avgScore, weeklyPFC, daysWithRecord, weeklyTotalPFC };
   }, [historyData]);
 
+  // Generate list of unique past supplements
+  const pastSupplements = useMemo(() => {
+    const supplementMap = new Map<string, MealHistory>();
+    Object.values(historyData).forEach(day => {
+      if (day.meals.supplement) {
+        day.meals.supplement.forEach(sup => {
+          if (sup && sup.name && !sup.isUnanalyzed && !supplementMap.has(sup.name)) {
+            supplementMap.set(sup.name, sup);
+          }
+        });
+      }
+    });
+    return Array.from(supplementMap.values());
+  }, [historyData]);
+
+  // Calculate today's supplement totals
+  const todaySupplementTotals = useMemo(() => {
+    let protein = 0, iron = 0, vitaminC = 0, calories = 0, carbs = 0, fat = 0;
+    if (todayHistory?.meals?.supplement) {
+      todayHistory.meals.supplement.forEach(sup => {
+        if (sup && !sup.isUnanalyzed) {
+          protein += sup.protein || 0;
+          iron += sup.iron || 0;
+          vitaminC += sup.vitaminC || 0;
+          calories += sup.calories || 0;
+          carbs += sup.carbs || 0;
+          fat += sup.fat || 0;
+        }
+      });
+    }
+    return { protein: Math.round(protein), iron: Math.round(iron), vitaminC: Math.round(vitaminC), calories: Math.round(calories), carbs: Math.round(carbs), fat: Math.round(fat) };
+  }, [todayHistory]);
+
   // Generate Today's Meal Evaluations
   const todayMealsList = useMemo(() => {
     const list: Array<{ id: string, time: string, name: string, calories: number, eval: 'good' | 'warning' | 'average', comment: string }> = [];
@@ -391,6 +424,19 @@ export default function Dashboard() {
     }
     return list;
   }, [todayHistory]);
+
+  const handleQuickRecordSupplement = (sup: MealHistory) => {
+    setMealText(sup.name);
+    setAnalysisResult({
+      foodName: sup.name,
+      calories: sup.calories,
+      protein: sup.protein,
+      fat: sup.fat,
+      carbs: sup.carbs,
+      iron: sup.iron,
+      vitaminC: sup.vitaminC,
+    });
+  };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -805,6 +851,41 @@ export default function Dashboard() {
               </div>
             </div>
 
+            {/* Today's Supplements Summary */}
+            {(todayHistory?.meals?.supplement?.length ?? 0) > 0 && (
+              <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
+                <h3 className="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
+                  <div className="w-2 h-5 bg-purple-500 rounded-full"/>本日のサプリからの摂取量
+                </h3>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">カロリー</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.calories}<span className="text-[10px] font-bold ml-0.5">kcal</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">タンパク質</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.protein}<span className="text-[10px] font-bold ml-0.5">g</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">鉄分</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.iron}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタミンC</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminC}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">脂質</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.fat}<span className="text-[10px] font-bold ml-0.5">g</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">炭水化物</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.carbs}<span className="text-[10px] font-bold ml-0.5">g</span></span>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* Meal Evaluations (Moved from Report Tab) */}
             {todayMealsList.length > 0 && (
               <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-100">
@@ -1022,6 +1103,19 @@ export default function Dashboard() {
                   ))}
                 </div>
               </div>
+
+              {mealCategory === 'supplement' && pastSupplements.length > 0 && !analysisResult && (
+                <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                  <label className="text-sm font-bold text-slate-700 mb-3 block">よく飲むサプリ</label>
+                  <div className="flex flex-wrap gap-2">
+                    {pastSupplements.map((sup, idx) => (
+                      <button key={idx} onClick={() => handleQuickRecordSupplement(sup)} className="bg-white border border-slate-200 shadow-sm text-xs font-bold text-slate-600 px-3 py-2.5 rounded-xl hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-all flex items-center gap-1.5 active:scale-95">
+                        💊 {sup.name}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <div>
                 <div className="flex justify-between items-center mb-3">
