@@ -8,7 +8,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLin
 import { Home, PlusCircle, Calendar as CalendarIcon, Settings, Camera, X, Info, Loader2, CheckCircle2, Sparkles, ChevronLeft, ChevronRight, Image as ImageIcon, Smile, AlertTriangle, CheckCircle, PieChart as PieChartIcon, Flame, Edit2, Trash2, LogOut, RefreshCw } from 'lucide-react';
 
 type Mode = 'diet' | 'health' | 'muscle';
-type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'snack';
+type MealCategory = 'breakfast' | 'lunch' | 'dinner' | 'snack' | 'supplement';
 type Tab = 'home' | 'calendar' | 'report';
 
 interface Macro {
@@ -138,7 +138,7 @@ export default function Dashboard() {
 
       const loadedHistory: Record<string, DailyHistory> = {};
       for (const log of user.DailyLogs) {
-        const mealsObj: Record<MealCategory, MealHistory[]> = { breakfast: [], lunch: [], dinner: [], snack: [] };
+        const mealsObj: Record<MealCategory, MealHistory[]> = { breakfast: [], lunch: [], dinner: [], snack: [], supplement: [] };
         for (const m of log.meals) {
           mealsObj[m.category as MealCategory].push({
             ...m,
@@ -252,10 +252,12 @@ export default function Dashboard() {
   const strokeDashoffset = circleCircumference - (caloriePercent / 100) * circleCircumference;
 
   const generateScoreAndAdvice = (totalCal: number, totalP: number, totalF: number, totalC: number, totalIron: number = 0, totalVC: number = 0) => {
-    const remCal = Math.max(0, currentTarget.calories - totalCal);
-    const remP = Math.max(0, currentTarget.protein - totalP);
-    const remF = Math.max(0, currentTarget.fat - totalF);
-    const remC = Math.max(0, currentTarget.carbs - totalC);
+    const remCal = Math.round(Math.max(0, currentTarget.calories - totalCal));
+    const remP = Math.round(Math.max(0, currentTarget.protein - totalP));
+    const remF = Math.round(Math.max(0, currentTarget.fat - totalF));
+    const remC = Math.round(Math.max(0, currentTarget.carbs - totalC));
+    const roundedIron = Math.round(totalIron);
+    const roundedVC = Math.round(totalVC);
     
     let advice = `あと ${remCal}kcal 食べられます。`;
 
@@ -287,10 +289,10 @@ export default function Dashboard() {
     }
 
     if (totalIron < 5 && totalCal > 300) {
-      advice += ` 鉄分が不足気味（現在${totalIron}mg）です。ほうれん草やレバー、赤身肉などを意識して取り入れてみてください。`;
+      advice += ` 鉄分が不足気味（現在${roundedIron}mg）です。ほうれん草やレバー、赤身肉などを意識して取り入れてみてください。`;
     }
     if (totalVC < 30 && totalCal > 300) {
-      advice += ` ビタミンCが不足気味（現在${totalVC}mg）です。ブロッコリーやキウイ、柑橘類などをデザートに追加すると良いですね。`;
+      advice += ` ビタミンCが不足気味（現在${roundedVC}mg）です。ブロッコリーやキウイ、柑橘類などをデザートに追加すると良いですね。`;
     }
 
     if (mode === 'diet' && remCal < 300 && remP > 15) {
@@ -375,7 +377,7 @@ export default function Dashboard() {
           if (!m || m.isUnanalyzed) return;
           const evaluation = m.calories > 800 ? 'warning' : m.calories > 500 ? 'average' : 'good';
           const comment = m.calories > 800 ? 'カロリーが高めでした。次の食事で調整しましょう。' : m.calories > 500 ? 'しっかりエネルギー補給できました。' : '適度なカロリーで抑えられています。';
-          const catLabel = cat === 'breakfast' ? '朝食' : cat === 'lunch' ? '昼食' : cat === 'dinner' ? '夕食' : '間食';
+          const catLabel = cat === 'breakfast' ? '朝食' : cat === 'lunch' ? '昼食' : cat === 'dinner' ? '夕食' : cat === 'snack' ? '間食' : 'サプリ';
           list.push({
             id: m.id || `${cat}-${idx}`,
             time: catLabel + (meals.length > 1 ? ` ${idx + 1}` : ''),
@@ -445,7 +447,7 @@ export default function Dashboard() {
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
         date: targetDate, score: 80, totalCalories: 0, status: 'achieved', advice: '新しく記録が追加されました！', 
-        meals: { breakfast: [], lunch: [], dinner: [], snack: [] } 
+        meals: { breakfast: [], lunch: [], dinner: [], snack: [], supplement: [] } 
       };
       
       const newMealObj = {
@@ -542,7 +544,7 @@ export default function Dashboard() {
     setHistoryData(prev => {
       const existingInfo = prev[targetDate] || { 
         date: targetDate, score: 80, totalCalories: 0, status: 'empty', advice: '未解析の食事が含まれており正確なスコアが出せません。', 
-        meals: { breakfast: [], lunch: [], dinner: [], snack: [] } 
+        meals: { breakfast: [], lunch: [], dinner: [], snack: [], supplement: [] } 
       };
       
       const newMealObj = {
@@ -865,7 +867,7 @@ export default function Dashboard() {
                 const isToday = dateStr === todayDateStr;
 
                 return (
-                  <button key={day} onClick={() => setSelectedDateDetails(history || { date: dateStr, score: 0, totalCalories: 0, status: 'empty', advice: 'この日の記録はまだありません。', meals: { breakfast: null, lunch: null, dinner: null, snack: null } })}
+                  <button key={day} onClick={() => setSelectedDateDetails(history || { date: dateStr, score: 0, totalCalories: 0, status: 'empty', advice: 'この日の記録はまだありません。', meals: { breakfast: [], lunch: [], dinner: [], snack: [], supplement: [] } })}
                     className={`relative flex flex-col items-center justify-start h-[72px] rounded-2xl p-1.5 transition-all
                       ${history ? 'cursor-pointer hover:ring-2 hover:ring-emerald-500/30 bg-slate-50' : 'cursor-pointer hover:ring-2 hover:ring-slate-300 bg-transparent opacity-60'}
                       ${isToday ? 'ring-2 ring-emerald-500 bg-emerald-50/50' : 'border border-slate-100'}
@@ -1015,7 +1017,7 @@ export default function Dashboard() {
               <div>
                 <label className="text-sm font-bold text-slate-700 mb-3 block">食事のタイミング</label>
                 <div className="flex gap-2">
-                  {([ { id: 'breakfast', label: '朝食' }, { id: 'lunch', label: '昼食' }, { id: 'dinner', label: '夕食' }, { id: 'snack', label: '間食' }, ] as {id: MealCategory, label: string}[]).map((cat) => (
+                  {([ { id: 'breakfast', label: '朝食' }, { id: 'lunch', label: '昼食' }, { id: 'dinner', label: '夕食' }, { id: 'snack', label: '間食' }, { id: 'supplement', label: 'サプリ' } ] as {id: MealCategory, label: string}[]).map((cat) => (
                     <button key={cat.id} onClick={() => setMealCategory(cat.id)} className={`flex-1 py-2 rounded-xl text-sm font-semibold transition-all ${ mealCategory === cat.id ? 'bg-emerald-50 text-emerald-700 ring-2 ring-emerald-500/20' : 'bg-slate-50 text-slate-500 hover:bg-slate-100' }`}>{cat.label}</button>
                   ))}
                 </div>
@@ -1076,7 +1078,7 @@ export default function Dashboard() {
                     </div>
                     <button onClick={handleRecord} className="w-full bg-slate-900 text-white font-bold rounded-2xl py-4 shadow-lg shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
                        <CheckCircle2 size={20} className="text-slate-300" />
-                       {(historyData[recordTargetDate === 'today' ? todayDateStr : recordTargetDate]?.meals[mealCategory]?.length > 0 && !editingMealId) ? `${({ breakfast: '朝食', lunch: '昼食', dinner: '夕食', snack: '間食' })[mealCategory]}をさらに追加する` : 'この内容で記録する'}
+                       {(historyData[recordTargetDate === 'today' ? todayDateStr : recordTargetDate]?.meals[mealCategory]?.length > 0 && !editingMealId) ? `${({ breakfast: '朝食', lunch: '昼食', dinner: '夕食', snack: '間食', supplement: 'サプリ' })[mealCategory]}をさらに追加する` : 'この内容で記録する'}
                     </button>
                   </div>
                 )}
@@ -1113,7 +1115,7 @@ export default function Dashboard() {
 
               <div className="space-y-4">
                 <h3 className="font-bold text-slate-800 text-sm">食事内容</h3>
-                {([ { id: 'breakfast', label: '朝食', icon: '🌅' }, { id: 'lunch', label: '昼食', icon: '☀️' }, { id: 'dinner', label: '夕食', icon: '🌙' }, { id: 'snack', label: '間食', icon: '🍪' }, ] as const).map((cat) => {
+                {([ { id: 'breakfast', label: '朝食', icon: '🌅' }, { id: 'lunch', label: '昼食', icon: '☀️' }, { id: 'dinner', label: '夕食', icon: '🌙' }, { id: 'snack', label: '間食', icon: '🍪' }, { id: 'supplement', label: 'サプリ', icon: '💊' } ] as const).map((cat) => {
                   const mealsForCat = selectedDateDetails.meals[cat.id];
                   if (!mealsForCat || mealsForCat.length === 0) return null;
                   return mealsForCat.map((meal, index) => (
