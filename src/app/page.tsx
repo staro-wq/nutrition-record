@@ -199,7 +199,23 @@ export default function Dashboard() {
   const [mealImage, setMealImage] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysisResult, setAnalysisResult] = useState<{ calories: number, protein: number, fat: number, carbs: number, iron: number, vitaminC: number, foodName?: string } | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<{ 
+    foodName?: string; 
+    calories: number; 
+    protein: number; 
+    fat: number; 
+    carbs: number; 
+    iron: number; 
+    vitaminC: number;
+    vitaminD?: number;
+    vitaminB1?: number;
+    vitaminB2?: number;
+    vitaminB6?: number;
+    vitaminB12?: number;
+    zinc?: number;
+    calcium?: number;
+    magnesium?: number;
+  } | null>(null);
   const [analysisError, setAnalysisError] = useState<string | null>(null);
 
   // --- Calendar Date State ---
