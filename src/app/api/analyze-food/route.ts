@@ -36,8 +36,16 @@ const nutritionSchema: Schema = {
       type: SchemaType.NUMBER,
       description: "推定されるビタミンC (mg)",
     },
+    vitaminD: { type: SchemaType.NUMBER, description: "推定されるビタミンD (μg)" },
+    vitaminB1: { type: SchemaType.NUMBER, description: "推定されるビタミンB1 (mg)" },
+    vitaminB2: { type: SchemaType.NUMBER, description: "推定されるビタミンB2 (mg)" },
+    vitaminB6: { type: SchemaType.NUMBER, description: "推定されるビタミンB6 (mg)" },
+    vitaminB12: { type: SchemaType.NUMBER, description: "推定されるビタミンB12 (μg)" },
+    zinc: { type: SchemaType.NUMBER, description: "推定される亜鉛 (mg)" },
+    calcium: { type: SchemaType.NUMBER, description: "推定されるカルシウム (mg)" },
+    magnesium: { type: SchemaType.NUMBER, description: "推定されるマグネシウム (mg)" },
   },
-  required: ["foodName", "calories", "protein", "fat", "carbs", "iron", "vitaminC"],
+  required: ["foodName", "calories", "protein", "fat", "carbs", "iron", "vitaminC", "vitaminD", "vitaminB1", "vitaminB2", "vitaminB6", "vitaminB12", "zinc", "calcium", "magnesium"],
 };
 
 export async function POST(req: Request) {

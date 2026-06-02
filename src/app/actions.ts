@@ -79,6 +79,14 @@ export async function syncDailyLog(userId: string, date: string, data: any, targ
           carbs: m.carbs,
           iron: m.iron || 0,
           vitaminC: m.vitaminC || 0,
+          vitaminD: m.vitaminD || 0,
+          vitaminB1: m.vitaminB1 || 0,
+          vitaminB2: m.vitaminB2 || 0,
+          vitaminB6: m.vitaminB6 || 0,
+          vitaminB12: m.vitaminB12 || 0,
+          zinc: m.zinc || 0,
+          calcium: m.calcium || 0,
+          magnesium: m.magnesium || 0,
           isUnanalyzed: m.isUnanalyzed || false,
           image: m.image || null
         });

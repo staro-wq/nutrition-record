@@ -47,7 +47,7 @@ const YukushiMessage = ({ message }: { message: string }) => (
 // ---------------------------------------------
 // DUMMY DATA FOR HISTORY SCREEN (Removed to start fresh)
 // ---------------------------------------------
-interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; iron: number; vitaminC: number; isUnanalyzed?: boolean; image?: string | null; }
+interface MealHistory { id?: string; name: string; calories: number; protein: number; fat: number; carbs: number; iron: number; vitaminC: number; vitaminD?: number; vitaminB1?: number; vitaminB2?: number; vitaminB6?: number; vitaminB12?: number; zinc?: number; calcium?: number; magnesium?: number; isUnanalyzed?: boolean; image?: string | null; }
 interface DailyHistory { date: string; score: number; totalCalories: number; status: 'achieved' | 'exceeded' | 'empty'; advice: string; meals: Record<MealCategory, MealHistory[]>; }
 
 
@@ -85,6 +85,8 @@ export default function Dashboard() {
   // --- Profile State ---
   const [profile, setProfile] = useState<UserProfile>({ height: '170', weight: '65', goal: '標準体重を目指す' });
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+
+  const [selectedPastSupplements, setSelectedPastSupplements] = useState<MealHistory[]>([]);
 
   const [currentMonth, setCurrentMonth] = useState(() => {
     const now = new Date();
@@ -370,7 +372,8 @@ export default function Dashboard() {
   // Generate list of unique past supplements
   const pastSupplements = useMemo(() => {
     const supplementMap = new Map<string, MealHistory>();
-    Object.values(historyData).forEach(day => {
+    const sortedDays = Object.values(historyData).sort((a, b) => b.date.localeCompare(a.date));
+    sortedDays.forEach(day => {
       if (day.meals.supplement) {
         day.meals.supplement.forEach(sup => {
           if (sup && sup.name && !sup.isUnanalyzed && !supplementMap.has(sup.name)) {
@@ -379,12 +382,13 @@ export default function Dashboard() {
         });
       }
     });
-    return Array.from(supplementMap.values());
+    return Array.from(supplementMap.values()).slice(0, 10);
   }, [historyData]);
 
   // Calculate today's supplement totals
   const todaySupplementTotals = useMemo(() => {
     let protein = 0, iron = 0, vitaminC = 0, calories = 0, carbs = 0, fat = 0;
+    let vitaminD = 0, vitaminB1 = 0, vitaminB2 = 0, vitaminB6 = 0, vitaminB12 = 0, zinc = 0, calcium = 0, magnesium = 0;
     if (todayHistory?.meals?.supplement) {
       todayHistory.meals.supplement.forEach(sup => {
         if (sup && !sup.isUnanalyzed) {
@@ -394,10 +398,25 @@ export default function Dashboard() {
           calories += sup.calories || 0;
           carbs += sup.carbs || 0;
           fat += sup.fat || 0;
+          vitaminD += sup.vitaminD || 0;
+          vitaminB1 += sup.vitaminB1 || 0;
+          vitaminB2 += sup.vitaminB2 || 0;
+          vitaminB6 += sup.vitaminB6 || 0;
+          vitaminB12 += sup.vitaminB12 || 0;
+          zinc += sup.zinc || 0;
+          calcium += sup.calcium || 0;
+          magnesium += sup.magnesium || 0;
         }
       });
     }
-    return { protein: Math.round(protein), iron: Math.round(iron), vitaminC: Math.round(vitaminC), calories: Math.round(calories), carbs: Math.round(carbs), fat: Math.round(fat) };
+    return { 
+      protein: Math.round(protein * 10) / 10, iron: Math.round(iron * 10) / 10, vitaminC: Math.round(vitaminC), 
+      calories: Math.round(calories), carbs: Math.round(carbs), fat: Math.round(fat),
+      vitaminD: Math.round(vitaminD * 10) / 10, vitaminB1: Math.round(vitaminB1 * 10) / 10, 
+      vitaminB2: Math.round(vitaminB2 * 10) / 10, vitaminB6: Math.round(vitaminB6 * 10) / 10, 
+      vitaminB12: Math.round(vitaminB12 * 10) / 10, zinc: Math.round(zinc * 10) / 10, 
+      calcium: Math.round(calcium), magnesium: Math.round(magnesium)
+    };
   }, [todayHistory]);
 
   // Generate Today's Meal Evaluations
@@ -425,17 +444,69 @@ export default function Dashboard() {
     return list;
   }, [todayHistory]);
 
-  const handleQuickRecordSupplement = (sup: MealHistory) => {
-    setMealText(sup.name);
-    setAnalysisResult({
-      foodName: sup.name,
-      calories: sup.calories,
-      protein: sup.protein,
-      fat: sup.fat,
-      carbs: sup.carbs,
-      iron: sup.iron,
-      vitaminC: sup.vitaminC,
+  const togglePastSupplement = (sup: MealHistory) => {
+    if (selectedPastSupplements.some(s => s.name === sup.name)) {
+      setSelectedPastSupplements(prev => prev.filter(s => s.name !== sup.name));
+    } else if (selectedPastSupplements.length < 10) {
+      setSelectedPastSupplements(prev => [...prev, sup]);
+    }
+  };
+
+  const handleRecordSelectedSupplements = () => {
+    const targetDate = recordTargetDate === 'today' ? todayDateStr : recordTargetDate;
+    
+    setHistoryData(prev => {
+      const existingInfo = prev[targetDate] || { 
+        date: targetDate, score: 80, totalCalories: 0, status: 'achieved', advice: '新しく記録が追加されました！', 
+        meals: { breakfast: [], lunch: [], dinner: [], snack: [], supplement: [] } 
+      };
+      
+      const newMeals = selectedPastSupplements.map((sup) => ({
+        ...sup,
+        id: crypto.randomUUID()
+      }));
+
+      const updatedMeals = {
+        ...existingInfo.meals,
+        supplement: [...(existingInfo.meals.supplement || []), ...newMeals]
+      };
+
+      const newTotal = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.calories || 0), 0);
+      const newTotalP = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.protein || 0), 0);
+      const newTotalF = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.fat || 0), 0);
+      const newTotalC = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.carbs || 0), 0);
+      const newTotalIron = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.iron || 0), 0);
+      const newTotalVC = Object.values(updatedMeals).flat().reduce((sum, m) => sum + (m?.vitaminC || 0), 0);
+      const newStatus = newTotal > currentTarget.calories ? 'exceeded' : 'achieved';
+      
+      const { score, advice } = generateScoreAndAdvice(newTotal, newTotalP, newTotalF, newTotalC, newTotalIron, newTotalVC);
+      
+      const updatedInfo = {
+        ...existingInfo,
+        totalCalories: newTotal,
+        score,
+        advice,
+        status: newStatus as 'achieved' | 'exceeded',
+        meals: updatedMeals
+      };
+      
+      syncDailyLog(deviceId, targetDate, updatedInfo, currentTarget.calories).catch(console.error);
+
+      return {
+        ...prev,
+        [targetDate]: updatedInfo
+      };
     });
+
+    setIsRecordModalOpen(false);
+    setTimeout(() => {
+      setSelectedPastSupplements([]);
+      setMealCategory('dinner');
+      if (recordTargetDate === 'today') {
+        setActiveTab('home'); 
+      }
+      setRecordTargetDate('today');
+    }, 300);
   };
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -476,6 +547,14 @@ export default function Dashboard() {
         carbs: data.carbs,
         iron: data.iron,
         vitaminC: data.vitaminC,
+        vitaminD: data.vitaminD,
+        vitaminB1: data.vitaminB1,
+        vitaminB2: data.vitaminB2,
+        vitaminB6: data.vitaminB6,
+        vitaminB12: data.vitaminB12,
+        zinc: data.zinc,
+        calcium: data.calcium,
+        magnesium: data.magnesium,
       });
     } catch (err: unknown) {
       setAnalysisError(err instanceof Error ? err.message : 'AIとの通信エラーが発生しました');
@@ -503,8 +582,16 @@ export default function Dashboard() {
         protein: analysisResult.protein,
         fat: analysisResult.fat,
         carbs: analysisResult.carbs,
-        iron: analysisResult.iron,
-        vitaminC: analysisResult.vitaminC,
+        iron: analysisResult.iron || 0,
+        vitaminC: analysisResult.vitaminC || 0,
+        vitaminD: analysisResult.vitaminD || 0,
+        vitaminB1: analysisResult.vitaminB1 || 0,
+        vitaminB2: analysisResult.vitaminB2 || 0,
+        vitaminB6: analysisResult.vitaminB6 || 0,
+        vitaminB12: analysisResult.vitaminB12 || 0,
+        zinc: analysisResult.zinc || 0,
+        calcium: analysisResult.calcium || 0,
+        magnesium: analysisResult.magnesium || 0,
         isUnanalyzed: false,
         image: mealImage
       };
@@ -515,7 +602,7 @@ export default function Dashboard() {
       if (editingMealId) {
         updatedCatMeals = existingCatMeals.map(m => m.id === editingMealId ? newMealObj : m);
       } else {
-        if (mealCategory !== 'snack' && existingCatMeals.length > 0) {
+        if (mealCategory !== 'snack' && mealCategory !== 'supplement' && existingCatMeals.length > 0) {
           const existingMeal = existingCatMeals[0];
           updatedCatMeals = [{
             ...existingMeal,
@@ -857,7 +944,7 @@ export default function Dashboard() {
                 <h3 className="text-sm font-extrabold text-slate-800 mb-4 flex items-center gap-2">
                   <div className="w-2 h-5 bg-purple-500 rounded-full"/>本日のサプリからの摂取量
                 </h3>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
                     <span className="text-[10px] font-bold text-purple-600 mb-1">カロリー</span>
                     <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.calories}<span className="text-[10px] font-bold ml-0.5">kcal</span></span>
@@ -867,20 +954,44 @@ export default function Dashboard() {
                     <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.protein}<span className="text-[10px] font-bold ml-0.5">g</span></span>
                   </div>
                   <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
-                    <span className="text-[10px] font-bold text-purple-600 mb-1">鉄分</span>
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">鉄分 (目安: 6.8mg)</span>
                     <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.iron}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
                   </div>
                   <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
-                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタミンC</span>
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタC (目安: 100mg)</span>
                     <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminC}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
                   </div>
                   <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
-                    <span className="text-[10px] font-bold text-purple-600 mb-1">脂質</span>
-                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.fat}<span className="text-[10px] font-bold ml-0.5">g</span></span>
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタD (目安: 8.5μg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminD}<span className="text-[10px] font-bold ml-0.5">μg</span></span>
                   </div>
                   <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
-                    <span className="text-[10px] font-bold text-purple-600 mb-1">炭水化物</span>
-                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.carbs}<span className="text-[10px] font-bold ml-0.5">g</span></span>
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタB1 (目安: 1.4mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminB1}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタB2 (目安: 1.6mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminB2}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタB6 (目安: 1.4mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminB6}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">ビタB12 (目安: 2.4μg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.vitaminB12}<span className="text-[10px] font-bold ml-0.5">μg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">亜鉛 (目安: 11mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.zinc}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">Ca (目安: 700mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.calcium}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
+                  </div>
+                  <div className="bg-purple-50 rounded-xl p-3 flex flex-col justify-center items-center">
+                    <span className="text-[10px] font-bold text-purple-600 mb-1">Mg (目安: 340mg)</span>
+                    <span className="font-black text-slate-800 text-lg">{todaySupplementTotals.magnesium}<span className="text-[10px] font-bold ml-0.5">mg</span></span>
                   </div>
                 </div>
               </div>
@@ -1106,14 +1217,22 @@ export default function Dashboard() {
 
               {mealCategory === 'supplement' && pastSupplements.length > 0 && !analysisResult && (
                 <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                  <label className="text-sm font-bold text-slate-700 mb-3 block">よく飲むサプリ</label>
+                  <label className="text-sm font-bold text-slate-700 mb-3 block">よく飲むサプリ (最大10個選択)</label>
                   <div className="flex flex-wrap gap-2">
-                    {pastSupplements.map((sup, idx) => (
-                      <button key={idx} onClick={() => handleQuickRecordSupplement(sup)} className="bg-white border border-slate-200 shadow-sm text-xs font-bold text-slate-600 px-3 py-2.5 rounded-xl hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 transition-all flex items-center gap-1.5 active:scale-95">
-                        💊 {sup.name}
-                      </button>
-                    ))}
+                    {pastSupplements.map((sup, idx) => {
+                      const isSelected = selectedPastSupplements.some(s => s.name === sup.name);
+                      return (
+                        <button key={idx} onClick={() => togglePastSupplement(sup)} className={`border shadow-sm text-xs font-bold px-3 py-2.5 rounded-xl transition-all flex items-center gap-1.5 active:scale-95 ${isSelected ? 'bg-purple-600 border-purple-600 text-white' : 'bg-white border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700'}`}>
+                          💊 {sup.name}
+                        </button>
+                      );
+                    })}
                   </div>
+                  {selectedPastSupplements.length > 0 && (
+                    <button onClick={handleRecordSelectedSupplements} className="w-full mt-4 bg-purple-600 text-white font-bold rounded-2xl py-3.5 shadow-md shadow-purple-900/20 hover:bg-purple-500 active:scale-[0.98] transition-all flex justify-center items-center gap-2">
+                      <CheckCircle2 size={18} /> 選択した {selectedPastSupplements.length} 個のサプリを記録
+                    </button>
+                  )}
                 </div>
               )}
 

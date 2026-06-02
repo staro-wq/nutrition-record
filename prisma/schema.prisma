@@ -46,6 +46,14 @@ model Meal {
   carbs        Int
   iron         Float    @default(0)
   vitaminC     Float    @default(0)
+  vitaminD     Float    @default(0)
+  vitaminB1    Float    @default(0)
+  vitaminB2    Float    @default(0)
+  vitaminB6    Float    @default(0)
+  vitaminB12   Float    @default(0)
+  zinc         Float    @default(0)
+  calcium      Float    @default(0)
+  magnesium    Float    @default(0)
   isUnanalyzed Boolean  @default(false)
   image        String?
   dailyLog     DailyLog @relation(fields: [dailyLogId], references: [id])
