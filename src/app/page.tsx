@@ -777,10 +777,12 @@ export default function Dashboard() {
             <YukushiMessage message={getAdvice()} />
 
             <div className="bg-white rounded-2xl p-6 shadow-sm border border-slate-100">
-              <h3 className="text-sm font-bold text-slate-800 mb-5">栄養素バランス（PFC）</h3>
+              <h3 className="text-sm font-bold text-slate-800 mb-1">栄養素バランス（PFC）</h3>
+              <p className="text-[10px] text-slate-400 mb-5">※目標値は厚生労働省「日本人の食事摂取基準」および体重・目的を基に算出しています</p>
               <div className="space-y-5">
                 {macros.map((macro, idx) => {
-                  const remaining = Math.max(0, macro.target - macro.consumed);
+                  const remaining = Math.round(Math.max(0, macro.target - macro.consumed));
+                  const consumed = Math.round(macro.consumed);
                   const percent = Math.min(100, (macro.consumed / macro.target) * 100);
                   
                   return (
@@ -788,7 +790,8 @@ export default function Dashboard() {
                       <div className="flex justify-between items-end mb-2">
                         <span className="text-sm font-semibold text-slate-700">{macro.label}</span>
                         <span className="text-xs font-medium text-slate-500">
-                          あと <span className={`text-sm font-bold ${percent >= 100 ? 'text-emerald-500' : 'text-slate-800'}`}>{remaining}{macro.unit}</span>
+                          摂取 <span className="font-bold text-slate-700">{consumed}</span>{macro.unit} / 
+                          あと <span className={`text-sm font-bold ${percent >= 100 ? 'text-emerald-500' : 'text-slate-800'}`}>{remaining}</span>{macro.unit}
                         </span>
                       </div>
                       <div className="h-2.5 w-full bg-slate-100 rounded-full overflow-hidden">
